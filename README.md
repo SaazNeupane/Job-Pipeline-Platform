@@ -54,9 +54,15 @@ directly.
 - [x] Wizard routes (draft, lanes, resume import, review, finalize — creates the Profile row
       + Google Sheet), dashboard routes (list/promote/dismiss/retry), swipe routes (queue/like/reject)
 - [x] `/api/internal/run/{user_id}` actually runs `run_pipeline.run()` (background task), not stubbed
-- [ ] Frontend: still points at nothing real — no login/signup screens, `api.js` not repointed
-      at the hosted backend, wizard/dashboard/swipe pages not wired to the new endpoints
-- [ ] Deploy: Render (backend) + Vercel (frontend) + Supabase (DB), wire real env vars
+- [x] Frontend rewired for real auth: login/signup pages, JWT via `AuthContext`, `api.js`
+      talks to the hosted backend (`VITE_API_BASE` + CORS, not same-origin), every route
+      dropped its old `<user>` URL segment, wizard's Google step rewritten for the real
+      browser-redirect OAuth flow. `npm run build` clean; CORS confirmed for real (preflight
+      from a running `localhost:5173` dev server against the live backend). **Not yet
+      verified in an actual browser** — no Chrome extension connection in this environment,
+      so clicking through signup → wizard → dashboard hasn't been visually confirmed.
+- [ ] Deploy: Render (backend) + Vercel (frontend), wire real env vars including a real
+      `GOOGLE_OAUTH_CLIENT_ID/SECRET` (still `dummy` placeholders everywhere so far)
 - [ ] Submit for Google OAuth app verification (external, manual, required before open
       signup can request Gmail/Drive scopes from arbitrary accounts — see plan doc)
 - [x] Backend actually runs, against a real hosted Postgres: a real Supabase project (free
