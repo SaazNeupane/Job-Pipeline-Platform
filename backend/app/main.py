@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets as _secrets
 import uuid
@@ -131,18 +132,19 @@ def me(user: User = Depends(get_current_user)):
 # Google OAuth connect (Sheets/Gmail/Drive scopes, separate from app login above)
 # ---------------------------------------------------------------------------
 
-# In-memory state->user_id map for the OAuth redirect round trip. Short-lived (a user
-# completes consent within a couple minutes or restarts the flow) -- fine as in-process
-# state even across Render's free-tier idle-sleep, since a sleep would drop an in-flight
-# OAuth redirect anyway and the user just clicks "Connect Google" again.
-_oauth_state: dict[str, str] = {}
+# In-memory state->(user_id, pkce code_verifier) map for the OAuth redirect round trip.
+# Short-lived (a user completes consent within a couple minutes or restarts the flow) --
+# fine as in-process state even across Render's free-tier idle-sleep, since a sleep would
+# drop an in-flight OAuth redirect anyway and the user just clicks "Connect Google" again.
+_oauth_state: dict[str, tuple[str, str]] = {}
 
 
 @app.get("/api/oauth/google/start")
 def google_oauth_start(user: User = Depends(get_current_user)):
     state = _secrets.token_urlsafe(24)
-    _oauth_state[state] = user.id
-    return {"authorization_url": pipeline_google_auth.build_authorization_url(state)}
+    auth_url, code_verifier = pipeline_google_auth.build_authorization_url(state)
+    _oauth_state[state] = (user.id, code_verifier)
+    return {"authorization_url": auth_url}
 
 
 @app.get("/api/oauth/google/callback")
@@ -158,12 +160,14 @@ def google_oauth_callback(code: str = "", state: str = "", error: str = ""):
     if error:
         return RedirectResponse(f"{target}?error={error}")
 
-    user_id = _oauth_state.pop(state, None)
-    if user_id is None:
+    entry = _oauth_state.pop(state, None)
+    if entry is None:
         return RedirectResponse(f"{target}?error=expired_state")
+    user_id, code_verifier = entry
     try:
-        pipeline_google_auth.exchange_code_for_credential(user_id, code)
+        pipeline_google_auth.exchange_code_for_credential(user_id, code, code_verifier)
     except Exception:  # noqa: BLE001 -- surfaced to the user via the redirect, not a crash
+        logging.exception("Google OAuth token exchange failed")
         return RedirectResponse(f"{target}?error=exchange_failed")
     return RedirectResponse(f"{target}?connected=1")
 

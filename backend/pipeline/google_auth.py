@@ -61,8 +61,11 @@ _credentials_cache: dict[str, Credentials] = {}
 _service_cache: dict[tuple[str, str], object] = {}
 
 
-def build_authorization_url(state: str) -> str:
-    """Step 1 of the web OAuth flow -- webapp's "Connect Google" button redirects here."""
+def build_authorization_url(state: str) -> tuple[str, str]:
+    """Step 1 of the web OAuth flow -- webapp's "Connect Google" button redirects here.
+    Returns (authorization_url, code_verifier) -- the PKCE verifier the Flow object just
+    generated internally, which the caller must hand back to exchange_code_for_credential
+    in step 2 since that runs in a separate request against a brand new Flow object."""
     flow = Flow.from_client_config(_CLIENT_CONFIG, scopes=SCOPES, redirect_uri=GOOGLE_REDIRECT_URI)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
@@ -70,15 +73,16 @@ def build_authorization_url(state: str) -> str:
         prompt="consent",  # forces a refresh_token to be returned even on a repeat consent
         state=state,
     )
-    return auth_url
+    return auth_url, flow.code_verifier
 
 
-def exchange_code_for_credential(user_id: str, code: str) -> OAuthCredential:
+def exchange_code_for_credential(user_id: str, code: str, code_verifier: str) -> OAuthCredential:
     """Step 2 -- Google redirects back to GOOGLE_OAUTH_REDIRECT_URI with ?code=...&state=...
     The route handler in app/main.py calls this with that code. Stores (or replaces) the
     encrypted refresh token for this user and returns the granted email for display."""
     db = _require_session()
     flow = Flow.from_client_config(_CLIENT_CONFIG, scopes=SCOPES, redirect_uri=GOOGLE_REDIRECT_URI)
+    flow.code_verifier = code_verifier
     flow.fetch_token(code=code)
     creds = flow.credentials
     if not creds.refresh_token:
