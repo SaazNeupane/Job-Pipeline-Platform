@@ -1,12 +1,11 @@
-"""FastAPI entrypoint. Three groups of routes:
+"""FastAPI entrypoint. Route groups:
   - /api/auth/*      signup/login for the app account itself
   - /api/oauth/*      the per-user Google Sheets/Gmail/Drive connect flow
+  - /api/wizard/*     setup wizard (app/routers/wizard.py)
+  - /api/dashboard/*  dashboard (app/routers/dashboard.py)
+  - /api/swipe/*      swipe queue (app/routers/swipe.py)
   - /api/internal/*   called only by the GitHub Actions scheduler workflow (shared-secret
                       header, not user auth) -- see .github/workflows/daily.yml
-Wizard/dashboard/swipe endpoints (profile CRUD, sheet reads, swipe actions) are still to be
-ported from the old webapp/app.py + webapp/wizard.py -- this file establishes the
-auth/OAuth/scheduler skeleton the plan calls for first; the data-editing routes are the next
-slice of work, not included in this pass.
 """
 
 from __future__ import annotations
@@ -15,18 +14,38 @@ import os
 import secrets as _secrets
 import uuid
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from google.auth.exceptions import RefreshError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.models import User
+from app.routers import dashboard as dashboard_router
+from app.routers import swipe as swipe_router
+from app.routers import wizard as wizard_router
 from pipeline import config as pipeline_config
 from pipeline import google_auth as pipeline_google_auth
 
 app = FastAPI(title="Job Pipeline Platform API")
+app.include_router(wizard_router.router)
+app.include_router(dashboard_router.router)
+app.include_router(swipe_router.router)
+
+
+@app.exception_handler(RefreshError)
+def google_reauth_handler(request: Request, exc: RefreshError):
+    """Any route that touches Sheets/Gmail/Drive can hit this if the stored refresh token
+    expired or was revoked -- same distinct code the old webapp's _handle_google_reauth
+    decorator returned, now handled globally instead of per-route."""
+    return JSONResponse(
+        status_code=401,
+        content={"error": "Google connection expired. Reconnect from the dashboard.", "code": "google_reauth_required"},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -152,12 +171,23 @@ def active_users(db: Session = Depends(get_db)):
     return {"user_ids": [u.id for u in users]}
 
 
-@app.post("/api/internal/run/{user_id}", dependencies=[Depends(_require_internal_secret)])
-def run_pipeline_for_user(user_id: str):
-    """Wraps the old run_pipeline.py orchestrator for exactly one user. Deliberately not
-    ported in this pass -- run_pipeline.run(user) needs the same treatment tailor_resume/
-    cover_letter/etc. already got (copy as-is, since it only calls load_profile/load_secrets/
-    search/filter/sheet_log, all of which already work against the DB-backed config via the
-    contextvar). Left as a TODO marker rather than silently stubbed to succeed, so a cron
-    call against this doesn't look like a real run before it is one."""
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, f"run_pipeline port pending for {user_id}")
+def _run_pipeline_in_background(user_id: str) -> None:
+    """A full run (search + filter + several LLM calls per lane) can easily exceed what's
+    safe to hold a single HTTP request open for on Render's free tier -- runs in the
+    background with its own DB session (the request's session closes as soon as the 202
+    response goes out) instead of blocking the scheduler's per-user call."""
+    from pipeline.run_pipeline import run
+
+    db = SessionLocal()
+    pipeline_config.set_session(db)
+    try:
+        run(user_id)
+    finally:
+        pipeline_config.set_session(None)
+        db.close()
+
+
+@app.post("/api/internal/run/{user_id}", dependencies=[Depends(_require_internal_secret)], status_code=status.HTTP_202_ACCEPTED)
+def run_pipeline_for_user(user_id: str, background_tasks: BackgroundTasks):
+    background_tasks.add_task(_run_pipeline_in_background, user_id)
+    return {"status": "started", "user_id": user_id}

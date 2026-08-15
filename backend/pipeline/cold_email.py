@@ -396,7 +396,7 @@ def run_cold_email_pipeline(user: str, profile, secrets: dict) -> dict:
             continue
         lane, matched_terms = match
         if lane.name not in resumes_by_lane:
-            resumes_by_lane[lane.name] = json.loads(profile.resume_path(lane.name).read_text(encoding="utf-8"))
+            resumes_by_lane[lane.name] = profile.resumes[lane.name]
         candidates.append((posting, matched_terms, lane.name, resumes_by_lane[lane.name]))
 
     # More matched terms = closer fit — same reasoning as run_pipeline.py's

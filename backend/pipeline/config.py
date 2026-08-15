@@ -100,6 +100,12 @@ class Profile:
     target_countries: list[str] = field(default_factory=lambda: ["ca"])
     apply_daily_cap: int = 15
     github_repo: str = ""
+    # Lane name -> parsed resume JSON dict (the old build_resume_json() output). The
+    # original file-based Profile had a resume_path(lane_name) -> Path method that
+    # swipe_actions.py/cold_email.py read+json.loads() themselves; there's no per-user
+    # filesystem here, so those two call sites were changed to `profile.resumes[name]`
+    # directly instead, and this dict is populated from ProfileRow.resumes_json.
+    resumes: dict[str, dict] = field(default_factory=dict)
 
     def lane(self, name: str) -> Lane:
         for lane in self.lanes:
@@ -135,6 +141,7 @@ def load_profile(user: str) -> Profile:
         target_countries=list(row.target_countries_json or ["ca"]),
         apply_daily_cap=row.apply_daily_cap,
         github_repo=row.github_repo or "",
+        resumes=dict(row.resumes_json or {}),
     )
 
 

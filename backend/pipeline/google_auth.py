@@ -88,6 +88,11 @@ def exchange_code_for_credential(user_id: str, code: str) -> OAuthCredential:
             "build_authorization_url's params."
         )
 
+    # Fetch the granted account's own email once, at connect time -- finalize() needs it
+    # for gmail_address/report_email, and the dashboard shows it so a user can tell which
+    # Google account is connected.
+    granted_email = build("gmail", "v1", credentials=creds).users().getProfile(userId="me").execute()["emailAddress"]
+
     existing = db.query(OAuthCredential).filter(
         OAuthCredential.user_id == user_id, OAuthCredential.provider == "google"
     ).one_or_none()
@@ -96,6 +101,7 @@ def exchange_code_for_credential(user_id: str, code: str) -> OAuthCredential:
         db.add(existing)
     existing.refresh_token_encrypted = encrypt(creds.refresh_token)
     existing.scopes = " ".join(creds.scopes or SCOPES)
+    existing.granted_email = granted_email
     db.commit()
 
     _credentials_cache.pop(user_id, None)

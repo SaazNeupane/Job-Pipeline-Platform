@@ -178,7 +178,7 @@ def generate_liked_materials(user: str, match: dict) -> None:
         posting = _posting_from_row(match)
         matched_terms = [t for t in match.get("matched_terms", "").split(",") if t]
 
-        resume = json.loads(profile.resume_path(lane.name).read_text(encoding="utf-8"))
+        resume = profile.resumes[lane.name]
         tailored = tailor_resume(resume, lane, matched_terms, posting.title, posting.description_text)
         tailored = reword_bullets_with_llm(user, tailored, posting, dry_run=False, blend_titles=lane.relabel_titles_to_posting)
 
