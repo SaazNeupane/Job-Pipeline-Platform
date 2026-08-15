@@ -20,29 +20,49 @@ Full architecture plan: `C:\Users\saazn\.claude\plans\jolly-churning-cookie.md`.
 `backend/pipeline/` — `search.py`, `filter.py`, `text_match.py`, `tailor_resume.py`,
 `cover_letter.py`, `cold_email.py`, `writing_style.py`, `sheet_log.py`, `json_cache.py`,
 `daily_report.py`, `swipe_actions.py`, `promote_application.py`, `dismiss_application.py`,
-`drive_storage.py` are copied from the old repo **unmodified**. They all call
-`load_profile(user)` / `load_secrets(user)` / `get_sheets_service(user)` / etc. with just a
-user id — same signatures as before. What changed is only where those functions get their
+`drive_storage.py`, `setup_sheet.py`, `run_pipeline.py` are copied from the old repo
+**unmodified** (two exceptions: `swipe_actions.py`/`cold_email.py` each had one line changed
+from `profile.resume_path(lane.name)` to `profile.resumes[lane.name]` — see below). They all
+call `load_profile(user)` / `load_secrets(user)` / `get_sheets_service(user)` / etc. with just
+a user id — same signatures as before. What changed is only where those functions get their
 data: `config.py` and `google_auth.py` are rewritten to read/write Postgres instead of
 `profiles/<user>/*.yaml` and `secrets.env`, using a contextvar (`pipeline.config.set_session`)
 so the DB session doesn't need to be threaded through every call site by hand.
-`app/main.py`'s middleware sets that contextvar once per request.
+`app/main.py`'s middleware sets that contextvar once per request; background tasks (swipe-like
+generation, the internal run endpoint) open and bind their own session instead, since the
+request's session is gone by the time a background task runs.
+
+`pipeline/wizard.py` is `webapp/wizard.py` trimmed to pure logic only (lane presets, lane/profile/
+resume-dict assembly, PDF import) — every filesystem-touching function from the original
+(`profile_dir_for`, `write_profile_files`, `save_github_repo`, ...) was dropped, since there's
+no per-user directory here; `app/routers/wizard.py` does the equivalent DB writes instead.
+
+`app/routers/{wizard,dashboard,swipe}.py` are the ported `webapp/app.py` route handlers,
+keyed off the JWT-authenticated user instead of a `<user>` URL segment + filesystem checks.
+
+One real gap found while porting: the old `Profile.resume_path(lane_name)` method read
+`resume_<lane>.json` off disk — no DB equivalent existed, since there's no per-user resume
+file anymore. Fixed by adding `Profile.resumes: dict[str, dict]` (lane name → resume JSON,
+backed by a new `profiles.resumes_json` column, populated at wizard finalize time) and
+switching the two call sites (`swipe_actions.py`, `cold_email.py`) to read `profile.resumes[...]`
+directly.
 
 ## Status / not yet done
 
-This is the first scaffolding pass, not a working deploy yet:
-
 - [x] Repo structure, reused pipeline modules, DB models, encrypted secrets/OAuth storage
-- [x] Auth skeleton (signup/login), Google OAuth web-flow skeleton (connect/callback)
-- [x] Internal scheduler endpoints (stubbed — `run_pipeline_for_user` returns 501)
-- [ ] Port `run_pipeline.py`'s orchestrator into the internal run endpoint
-- [ ] Port `webapp/wizard.py` + `webapp/app.py`'s profile-editing/dashboard/swipe routes —
-      currently only auth + OAuth connect exist as real endpoints
-- [ ] Frontend: swap `api.js`'s base URL and local-dashboard assumptions for real
-      login/signup screens, repoint at the hosted backend
+- [x] Auth (signup/login), Google OAuth web flow (connect/callback), granted-email capture
+- [x] Wizard routes (draft, lanes, resume import, review, finalize — creates the Profile row
+      + Google Sheet), dashboard routes (list/promote/dismiss/retry), swipe routes (queue/like/reject)
+- [x] `/api/internal/run/{user_id}` actually runs `run_pipeline.run()` (background task), not stubbed
+- [ ] Frontend: still points at nothing real — no login/signup screens, `api.js` not repointed
+      at the hosted backend, wizard/dashboard/swipe pages not wired to the new endpoints
 - [ ] Deploy: Render (backend) + Vercel (frontend) + Supabase (DB), wire real env vars
 - [ ] Submit for Google OAuth app verification (external, manual, required before open
       signup can request Gmail/Drive scopes from arbitrary accounts — see plan doc)
+- [ ] **Nothing has been run in this environment** — no `pip install`/`npm install`, no live
+      server, no DB. Verification so far is `python -m py_compile` on every new/changed
+      backend file (confirms syntax only, not imports/behavior). Before trusting this, install
+      real deps, run `scripts/init_db.py` against a real Postgres, and hit `/health` at minimum.
 
 ## Local dev
 
