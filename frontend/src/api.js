@@ -1,54 +1,72 @@
-// Thin fetch wrapper for the Flask JSON API (webapp/app.py). Every helper
-// resolves to the parsed JSON body on success and throws an Error whose
-// message is the backend's own {"error": "..."} text on failure, so
-// callers can just `catch (e) { setError(e.message) }` without re-deriving
-// what went wrong.
+// Thin fetch wrapper for the hosted FastAPI backend (backend/app/main.py +
+// app/routers/*). Every helper resolves to the parsed JSON body on success and throws an
+// Error whose message is the backend's own {"detail": "..."} (or legacy {"error": "..."})
+// text on failure, so callers can just `catch (e) { setError(e.message) }`.
 //
-// Every failure ALSO fires a global toast (see toast.js/ToastHost.jsx) --
-// components still get the thrown Error for their own inline
-// error-banner/field-level context, but a toast is always visible
-// regardless of how far down the page that banner would render, which an
-// inline banner alone can't guarantee on a long form.
+// Every failure ALSO fires a global toast (see toast.js/ToastHost.jsx) -- components still
+// get the thrown Error for their own inline error-banner/field-level context, but a toast is
+// always visible regardless of how far down the page that banner would render.
+//
+// Auth: the backend is multi-tenant now -- every route (except signup/login/lane-presets)
+// requires a JWT in an Authorization header instead of a `<user>` URL segment. The token is
+// held here in memory + localStorage (see auth/AuthContext.jsx, which owns the React-visible
+// login/logout state and calls setToken/clearToken below to keep this module in sync).
 
 import { showToast } from "./toast.js";
+
+export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
+const TOKEN_STORAGE_KEY = "job_pipeline_token";
+let token = localStorage.getItem(TOKEN_STORAGE_KEY) || "";
+
+export function setToken(next) {
+  token = next || "";
+  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  else localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getToken() {
+  return token;
+}
 
 async function handle(resp) {
   let body = null;
   try {
     body = await resp.json();
   } catch {
-    // no body (e.g. a 503 plain-text "frontend not built" response)
+    // no body
   }
   if (!resp.ok) {
-    const message = (body && body.error) || `Request failed (${resp.status})`;
+    const message = (body && (body.error || body.detail)) || `Request failed (${resp.status})`;
     showToast(message);
     const err = new Error(message);
     err.code = body && body.code;
+    err.status = resp.status;
     throw err;
   }
   return body;
 }
 
-function get(path) {
-  return fetch(path).then(handle);
+function authHeaders(extra) {
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
 }
 
-function del(path) {
-  return fetch(path, { method: "DELETE" }).then(handle);
+function get(path) {
+  return fetch(`${API_BASE}${path}`, { headers: authHeaders() }).then(handle);
 }
 
 function post(path, body) {
-  return fetch(path, {
+  return fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: authHeaders(body ? { "Content-Type": "application/json" } : undefined),
     body: body ? JSON.stringify(body) : undefined,
   }).then(handle);
 }
 
 function patch(path, body) {
-  return fetch(path, {
+  return fetch(`${API_BASE}${path}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   }).then(handle);
 }
@@ -57,41 +75,37 @@ function upload(path, file, fieldName, extraFields) {
   const form = new FormData();
   form.append(fieldName, file);
   for (const [k, v] of Object.entries(extraFields || {})) form.append(k, v);
-  return fetch(path, { method: "POST", body: form }).then(handle);
+  return fetch(`${API_BASE}${path}`, { method: "POST", headers: authHeaders(), body: form }).then(handle);
 }
 
 export const api = {
-  profiles: () => get("/api/profiles"),
-  deleteProfile: (user) => del(`/api/profiles/${user}`),
-  lanePresets: () => get("/api/lane-presets"),
+  // -- auth (app account, not Google) --
+  signup: (email, password) => post("/api/auth/signup", { email, password }),
+  login: (email, password) => post("/api/auth/login", { email, password }),
+  me: () => get("/api/me"),
 
-  wizardStart: (user, confirmOverwrite) => post("/api/wizard/start", { user, confirm_overwrite: confirmOverwrite }),
-  wizardDraft: (user) => get(`/api/wizard/${user}/draft`),
-  patchDraft: (user, body) => patch(`/api/wizard/${user}/draft`, body),
-  submitLanes: (user, body) => post(`/api/wizard/${user}/lanes`, body),
-  importResume: (user, file, geminiApiKey) => upload(`/api/wizard/${user}/resume/import`, file, "resume_pdf", { gemini_api_key: geminiApiKey }),
-  googleState: (user) => get(`/api/wizard/${user}/google`),
-  uploadClientSecret: (user, file) => upload(`/api/wizard/${user}/google/client-secret`, file, "client_secret"),
-  connectGoogle: (user) => post(`/api/wizard/${user}/google/connect`),
-  googleStatus: (user) => get(`/api/wizard/${user}/google/status`),
-  review: (user) => get(`/api/wizard/${user}/review`),
-  finalize: (user) => post(`/api/wizard/${user}/finalize`),
-  pushCommands: (user) => get(`/api/wizard/${user}/push`),
-  push: (user, repo) => post(`/api/wizard/${user}/push`, { repo }),
+  // -- google connect (Sheets/Gmail/Drive scopes) --
+  googleOAuthStart: () => get("/api/oauth/google/start"),
+  googleOAuthStatus: () => get("/api/oauth/google/status"),
 
-  swipeQueue: (user) => get(`/api/swipe/${user}/queue`),
-  swipeLike: (user, postingKey) => post(`/api/swipe/${user}/${encodeURIComponent(postingKey)}/like`),
-  swipeReject: (user, postingKey) => post(`/api/swipe/${user}/${encodeURIComponent(postingKey)}/reject`),
+  // -- wizard --
+  lanePresets: () => get("/api/wizard/lane-presets"),
+  wizardDraft: () => get("/api/wizard/draft"),
+  patchDraft: (body) => patch("/api/wizard/draft", body),
+  submitLanes: (body) => post("/api/wizard/lanes", body),
+  importResume: (file, geminiApiKey) => upload("/api/wizard/resume/import", file, "resume_pdf", { gemini_api_key: geminiApiKey }),
+  review: () => get("/api/wizard/review"),
+  finalize: () => post("/api/wizard/finalize"),
 
-  dashboard: (user) => get(`/api/dashboard/${user}`),
-  dashboardGoogleReconnect: (user) => post(`/api/dashboard/${user}/google/reconnect`),
-  dashboardGoogleReconnectStatus: (user) => get(`/api/dashboard/${user}/google/reconnect/status`),
-  promote: (user, postingKey) => post(`/api/dashboard/${user}/promote/${encodeURIComponent(postingKey)}`),
-  dismiss: (user, postingKey) => post(`/api/dashboard/${user}/dismiss/${encodeURIComponent(postingKey)}`),
-  retry: (user, postingKey) => post(`/api/dashboard/${user}/retry/${encodeURIComponent(postingKey)}`),
-  dismissBulk: (user, postingKeys) => post(`/api/dashboard/${user}/dismiss-bulk`, { posting_keys: postingKeys }),
-  setRepo: (user, repo) => post(`/api/dashboard/${user}/set-repo`, { repo }),
-  runNow: (user, options) => post(`/api/dashboard/${user}/run-now`, options),
+  // -- swipe queue --
+  swipeQueue: () => get("/api/swipe/queue"),
+  swipeLike: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/like`),
+  swipeReject: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/reject`),
 
-  shutdown: () => post("/api/shutdown"),
+  // -- dashboard --
+  dashboard: () => get("/api/dashboard"),
+  promote: (postingKey) => post(`/api/dashboard/promote/${encodeURIComponent(postingKey)}`),
+  dismiss: (postingKey) => post(`/api/dashboard/dismiss/${encodeURIComponent(postingKey)}`),
+  retry: (postingKey) => post(`/api/dashboard/retry/${encodeURIComponent(postingKey)}`),
+  dismissBulk: (postingKeys) => post("/api/dashboard/dismiss-bulk", { posting_keys: postingKeys }),
 };

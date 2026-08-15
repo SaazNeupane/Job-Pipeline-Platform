@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation, useParams } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { api } from "../api.js";
 import FlowRail from "../components/FlowRail.jsx";
 import Loading from "../components/Loading.jsx";
@@ -11,16 +11,12 @@ const STEPS = [
   ["keys", "API Keys"],
   ["google", "Connect Google"],
   ["review", "Review"],
-  ["push", "Push to GitHub"],
   ["done", "Done"],
 ];
 
 export default function WizardLayout() {
-  const { user } = useParams();
   const location = useLocation();
-  const { data: draft, error, setError, reload: refreshDraft } = useApiData(() => api.wizardDraft(user), [user]);
-
-  if (!user) return <Navigate to="/setup/start" replace />;
+  const { data: draft, error, setError, reload: refreshDraft } = useApiData(() => api.wizardDraft(), []);
 
   const currentKey = location.pathname.split("/").filter(Boolean).pop();
   const currentIndex = STEPS.findIndex(([key]) => key === currentKey);
@@ -39,7 +35,7 @@ export default function WizardLayout() {
       <div>
         {error && <p className="error-banner">{error}</p>}
         {draft ? (
-          <Outlet context={{ user, draft, refreshDraft, setError }} />
+          <Outlet context={{ draft, refreshDraft, setError }} />
         ) : (
           <Loading />
         )}

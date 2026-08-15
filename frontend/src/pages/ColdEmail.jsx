@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
@@ -25,23 +24,12 @@ function ColdEmailCard({ row }) {
 }
 
 export default function ColdEmail() {
-  const { user } = useParams();
-  const { data, error } = useApiData(() => api.dashboard(user), [user]);
-  const [runStatus, setRunStatus] = useState("");
-  const [running, setRunning] = useState(false);
+  const { data, error } = useApiData(() => api.dashboard(), []);
 
   if (error) return <p className="error-banner">{error}</p>;
   if (!data) return <Loading />;
 
   const latestSummary = data.summary.length ? data.summary[data.summary.length - 1] : null;
-
-  async function runNow() {
-    setRunning(true);
-    const res = await api.runNow(user, { cold_email_only: true });
-    setRunning(false);
-    setRunStatus(res.status);
-    if (res.status === "triggered") setTimeout(() => setRunStatus(""), 6000);
-  }
 
   return (
     <>
@@ -54,16 +42,9 @@ export default function ColdEmail() {
           </p>
         </div>
         <div className="dash-head-links">
-          {data.github_repo && (
-            <button type="button" onClick={runNow} disabled={running}>{running ? "Triggering…" : "Run cold email now"}</button>
-          )}
-          <Link className="button secondary" to={`/dashboard/${user}`}>Back to dashboard</Link>
+          <Link className="button secondary" to="/dashboard">Back to dashboard</Link>
         </div>
       </div>
-
-      {runStatus === "triggered" && <div className="banner info">Triggered. Check GitHub Actions in a minute or two.</div>}
-      {runStatus === "failed" && <div className="banner">Couldn't trigger the run. Make sure the GitHub CLI is installed and logged in (<code>gh auth login</code>), then try again.</div>}
-      {!data.github_repo && <div className="banner info">No repo on file yet. Set one on the dashboard first to enable manual runs.</div>}
 
       {latestSummary && (
         <div className="stat-strip">

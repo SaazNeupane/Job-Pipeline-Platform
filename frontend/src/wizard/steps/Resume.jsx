@@ -6,7 +6,7 @@ import { api } from "../../api.js";
 // <form> (Back/Next), and nested <form> elements are invalid HTML (the
 // browser silently drops the inner one, so its own submit button would fire
 // the OUTER form instead). Plain button + refs instead.
-function ImportFromPdf({ user, onImported }) {
+function ImportFromPdf({ onImported }) {
   const fileRef = useRef(null);
   const keyRef = useRef(null);
   const [importing, setImporting] = useState(false);
@@ -20,7 +20,7 @@ function ImportFromPdf({ user, onImported }) {
     if (!geminiKey) return setError("A Gemini API key is needed to read the PDF.");
     setImporting(true);
     try {
-      const resume = await api.importResume(user, file, geminiKey);
+      const resume = await api.importResume(file, geminiKey);
       onImported(resume);
     } catch (err) {
       setError(err.message);
@@ -116,7 +116,7 @@ const SECTIONS = [
 ];
 
 export default function Resume() {
-  const { user, draft, refreshDraft } = useOutletContext();
+  const { draft, refreshDraft } = useOutletContext();
   const navigate = useNavigate();
   const laneNames = draft.lane_names || [];
   const laneLabels = draft.lane_labels || {};
@@ -129,7 +129,7 @@ export default function Resume() {
   // shown a section at a time with its own Back/Continue.
   const [section, setSection] = useState(0);
 
-  if (!laneNames.length) return <Navigate to={`/setup/${user}/lanes`} replace />;
+  if (!laneNames.length) return <Navigate to="/setup/lanes" replace />;
 
   const update = (patch) => setR((prev) => ({ ...prev, ...patch }));
   const updateList = (key, id, patch) => setR((prev) => ({ ...prev, [key]: prev[key].map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
@@ -148,7 +148,7 @@ export default function Resume() {
 
   function prevSection() {
     setError("");
-    if (section === 0) navigate(`/setup/${user}/lanes`);
+    if (section === 0) navigate("/setup/lanes");
     else setSection((s) => s - 1);
   }
 
@@ -176,9 +176,9 @@ export default function Resume() {
     }
 
     try {
-      await api.patchDraft(user, { shared_resume });
+      await api.patchDraft({ shared_resume });
       await refreshDraft();
-      navigate(`/setup/${user}/keys`);
+      navigate("/setup/keys");
     } catch (err) {
       setError(err.message);
     }
@@ -203,7 +203,7 @@ export default function Resume() {
               Enter your real work history once. On later steps you'll tick which job type(s) each entry applies to.
               An entry only tagged to one job type won't show up on another job type's resume.
             </p>
-            <ImportFromPdf user={user} onImported={(resume) => { setR(fromInitial(resume)); setSection((s) => s + 1); }} />
+            <ImportFromPdf onImported={(resume) => { setR(fromInitial(resume)); setSection((s) => s + 1); }} />
             <p className="hint">Or skip this and fill it in by hand on the next steps.</p>
           </>
         )}

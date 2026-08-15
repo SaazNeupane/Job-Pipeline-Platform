@@ -43,7 +43,7 @@ const LANE_ICONS = {
 };
 
 export default function Lanes() {
-  const { user, draft, refreshDraft } = useOutletContext();
+  const { draft, refreshDraft } = useOutletContext();
   const navigate = useNavigate();
 
   const [selectedPresets, setSelectedPresets] = useState(new Set(draft.lane_names || []));
@@ -93,7 +93,7 @@ export default function Lanes() {
       }));
 
     try {
-      await api.submitLanes(user, {
+      await api.submitLanes({
         presets, custom_lanes,
         greenhouse_boards: csv(greenhouseBoards),
         lever_companies: csv(leverCompanies),
@@ -102,7 +102,7 @@ export default function Lanes() {
         target_countries: csv(targetCountries).map((c) => c.toLowerCase()),
       });
       await refreshDraft();
-      navigate(`/setup/${user}/resume`);
+      navigate("/setup/resume");
     } catch (err) {
       setError(err.message);
     }
@@ -185,7 +185,7 @@ export default function Lanes() {
         </details>
 
         <div className="wizard-actions">
-          <button type="button" className="ghost" onClick={() => navigate(`/setup/${user}/about`)}>Back</button>
+          <button type="button" className="ghost" onClick={() => navigate("/setup/about")}>Back</button>
           <button type="submit" className="primary">Continue</button>
         </div>
       </form>

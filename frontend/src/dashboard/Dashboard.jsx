@@ -1,23 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import Collapsible from "../components/Collapsible.jsx";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
 import { useApiData } from "../hooks/useApiData.js";
 import { sourceLabel } from "../sourceLabels.js";
-
-// profile.yaml's github_repo has been saved both ways in the wild -- a
-// plain "owner/repo" (what the wizard writes) and a full clone URL like
-// "https://github.com/owner/repo.git" (what a manual `set-repo` or hand
-// edit can produce). Normalize both down to "owner/repo" for display so
-// the dashboard never shows a raw .git URL next to the Run now button.
-function repoLabel(repo) {
-  return repo.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
-}
-function repoUrl(repo) {
-  return `https://github.com/${repoLabel(repo)}`;
-}
 
 function CopyButton({ text }) {
   const [copied, setCopied] = useState(false);
@@ -111,28 +99,26 @@ function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRe
   );
 }
 
-function GoogleReconnectBanner({ user, onReconnected }) {
+function GoogleReconnectBanner({ onReconnected }) {
   const [status, setStatus] = useState("idle"); // idle | pending | error
 
   useEffect(() => {
     if (status !== "pending") return;
     const id = setInterval(async () => {
-      const res = await api.dashboardGoogleReconnectStatus(user);
-      if (res.status === "done") {
+      const res = await api.googleOAuthStatus();
+      if (res.connected) {
         clearInterval(id);
         onReconnected();
-      } else if (res.status === "error") {
-        clearInterval(id);
-        setStatus("error");
       }
     }, 1500);
     return () => clearInterval(id);
-  }, [status, user, onReconnected]);
+  }, [status, onReconnected]);
 
   async function reconnect() {
     setStatus("pending");
     try {
-      await api.dashboardGoogleReconnect(user);
+      const { authorization_url } = await api.googleOAuthStart();
+      window.location.href = authorization_url;
     } catch {
       setStatus("error");
     }
@@ -141,30 +127,21 @@ function GoogleReconnectBanner({ user, onReconnected }) {
   return (
     <div className="error-banner">
       <p>Your Google connection expired -- Sheets/Gmail/Drive calls can't go through until you reconnect.</p>
-      {status === "pending" ? (
-        <p>A browser window should have opened for you to sign in with Google. Waiting for you to finish…</p>
-      ) : (
-        <button type="button" onClick={reconnect}>Reconnect Google</button>
-      )}
-      {status === "error" && <p>Reconnect didn't finish. Try again, or re-run the setup wizard's Google step.</p>}
+      <button type="button" onClick={reconnect}>Reconnect Google</button>
+      {status === "error" && <p>Reconnect didn't finish. Try again.</p>}
     </div>
   );
 }
 
 export default function Dashboard() {
-  const { user } = useParams();
-  const { data, error, errorCode, setError, reload: load } = useApiData(() => api.dashboard(user), [user]);
+  const { data, error, errorCode, setError, reload: load } = useApiData(() => api.dashboard(), []);
   const [selected, setSelected] = useState(new Set());
   const [openDetail, setOpenDetail] = useState(null);
-  const [repoInput, setRepoInput] = useState("");
-  const [runStatus, setRunStatus] = useState("");
   const [laneFilter, setLaneFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [busyRows, setBusyRows] = useState({}); // posting_key -> "promote" | "dismiss"
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [runLane, setRunLane] = useState("");
-  const [runDays, setRunDays] = useState("");
 
   // A right-swipe writes its pending_approval row immediately
   // (reason_held="generating") and fills in the resume/cover letter a few
@@ -212,7 +189,7 @@ export default function Dashboard() {
   async function promote(key) {
     setBusyRows((prev) => ({ ...prev, [key]: "promote" }));
     try {
-      await api.promote(user, key);
+      await api.promote(key);
       load();
     } catch (err) {
       setError(err.message);
@@ -223,7 +200,7 @@ export default function Dashboard() {
   async function retry(key) {
     setBusyRows((prev) => ({ ...prev, [key]: "retry" }));
     try {
-      await api.retry(user, key);
+      await api.retry(key);
       load();
     } catch (err) {
       setError(err.message);
@@ -234,7 +211,7 @@ export default function Dashboard() {
   async function dismiss(key) {
     setBusyRows((prev) => ({ ...prev, [key]: "dismiss" }));
     try {
-      await api.dismiss(user, key);
+      await api.dismiss(key);
       load();
     } catch (err) {
       setError(err.message);
@@ -246,7 +223,7 @@ export default function Dashboard() {
     if (!selected.size || bulkBusy) return;
     setBulkBusy(true);
     try {
-      await api.dismissBulk(user, [...selected]);
+      await api.dismissBulk([...selected]);
       setSelected(new Set());
       load();
     } catch (err) {
@@ -255,23 +232,8 @@ export default function Dashboard() {
       setBulkBusy(false);
     }
   }
-  async function saveRepo(e) {
-    e.preventDefault();
-    try {
-      await api.setRepo(user, repoInput);
-      load();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-  async function runNow() {
-    setRunStatus("");
-    const res = await api.runNow(user, { lane: runLane, days: runDays });
-    setRunStatus(res.status);
-    if (res.status === "triggered") setTimeout(() => setRunStatus(""), 6000);
-  }
 
-  if (errorCode === "google_reauth_required") return <GoogleReconnectBanner user={user} onReconnected={load} />;
+  if (errorCode === "google_reauth_required") return <GoogleReconnectBanner onReconnected={load} />;
   if (error) return <p className="error-banner">{error}</p>;
   if (!data) return <Loading />;
 
@@ -279,20 +241,16 @@ export default function Dashboard() {
     <>
       <div className="dash-head">
         <div>
-          <h1>{user}'s dashboard</h1>
+          <h1>Your dashboard</h1>
           <p className="lede">A friendlier view of your Google Sheet. Nothing here is stored separately from it.</p>
         </div>
         <div className="dash-head-links">
-          <Link className="button secondary" to={`/cold-email/${user}`}>Cold email</Link>
-          <Link className="button primary" to={`/swipe/${user}`}>
+          <Link className="button secondary" to="/cold-email">Cold email</Link>
+          <Link className="button primary" to="/swipe">
             Swipe queue{data.swipe_queue_count ? ` (${data.swipe_queue_count})` : ""}
           </Link>
         </div>
       </div>
-
-      {runStatus === "triggered" && <div className="banner info">Triggered. Check GitHub Actions in a minute or two.</div>}
-      {runStatus === "failed" && <div className="banner">Couldn't trigger the run. Make sure the GitHub CLI is installed and logged in (<code>gh auth login</code>), then try again.</div>}
-      {runStatus === "no_repo" && <div className="banner">No repo on file yet. Enter yours below first.</div>}
 
       <div className="stat-strip">
         <div className="stat-item">
@@ -303,7 +261,7 @@ export default function Dashboard() {
           <div className="eyebrow">Applied</div>
           <div className="stat-num pine">{data.applied.length}</div>
         </div>
-        <Link className="stat-item stat-item-link" to={`/cold-email/${user}`}>
+        <Link className="stat-item stat-item-link" to="/cold-email">
           <div className="eyebrow">Cold emails</div>
           <div className="stat-num">{data.cold_emails.length}</div>
         </Link>
@@ -311,43 +269,6 @@ export default function Dashboard() {
           <div className="eyebrow">Runs logged</div>
           <div className="stat-num">{data.summary.length}</div>
         </div>
-      </div>
-
-      <div className="run-bar">
-        {data.github_repo ? (
-          <>
-            <div>
-              <div className="eyebrow">Daily run</div>
-              <a href={repoUrl(data.github_repo)} target="_blank" rel="noopener">{repoLabel(data.github_repo)}</a>
-            </div>
-            <div className="run-override">
-              <label>
-                Job type
-                <select value={runLane} onChange={(e) => setRunLane(e.target.value)}>
-                  <option value="">All</option>
-                  {data.lane_names.map((n) => <option key={n} value={n}>{data.lane_labels[n] || n.replace(/_/g, " ")}</option>)}
-                </select>
-              </label>
-              <label>
-                Posted in the last
-                <div className="run-override-days">
-                  <input
-                    type="number" min="1" value={runDays} onChange={(e) => setRunDays(e.target.value)}
-                    placeholder="14"
-                  />
-                  <span>days</span>
-                </div>
-              </label>
-              <span className="hint">Only affects this one run. Leave both blank to run every job type with the normal 14-day window, same as the daily schedule.</span>
-            </div>
-            <button onClick={runNow}>Run now</button>
-          </>
-        ) : (
-          <form onSubmit={saveRepo}>
-            <label>GitHub repo<input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="you/Job-Pipeline" required /></label>
-            <button type="submit">Save to enable Run now</button>
-          </form>
-        )}
       </div>
 
       <h2 style={{ marginTop: 0 }}>Needs your review</h2>

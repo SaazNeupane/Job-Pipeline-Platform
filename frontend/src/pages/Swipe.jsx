@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import Loading from "../components/Loading.jsx";
 import { useApiData } from "../hooks/useApiData.js";
@@ -64,8 +64,7 @@ function SwipeCardPeek({ row, laneLabels }) {
 const EXIT_ANIMATION_MS = 260;
 
 export default function Swipe() {
-  const { user } = useParams();
-  const { data, error, setError, setData } = useApiData(() => api.swipeQueue(user), [user]);
+  const { data, error, setError, setData } = useApiData(() => api.swipeQueue(), []);
   const queue = data?.queue;
   const laneLabels = data?.lane_labels || {};
   const [busy, setBusy] = useState(false);
@@ -89,7 +88,7 @@ export default function Swipe() {
     setError("");
     setExiting(direction);
 
-    const request = direction === "like" ? api.swipeLike(user, current.posting_key) : api.swipeReject(user, current.posting_key);
+    const request = direction === "like" ? api.swipeLike(current.posting_key) : api.swipeReject(current.posting_key);
     request
       .then((result) => { if (direction === "like") setLastLiked(result.row); })
       .catch((e) => setError(e.message));
@@ -127,17 +126,17 @@ export default function Swipe() {
     <>
       <div className="dash-head">
         <div>
-          <h1>{user}'s swipe queue</h1>
+          <h1>Your swipe queue</h1>
           <p className="lede">New postings land here. Swipe right to tailor a resume and cover letter you can apply with by hand, or left to set one aside for good.</p>
         </div>
-        <Link className="button secondary" to={`/dashboard/${user}`}>Dashboard</Link>
+        <Link className="button secondary" to="/dashboard">Dashboard</Link>
       </div>
 
       {error && <div className="banner">{error}</div>}
       {lastLiked && (
         <div className="banner info">
           Tailoring resume/cover letter for <strong>{lastLiked.company}</strong> in the background.
-          {" "}Check your <Link to={`/dashboard/${user}`}>dashboard</Link> in a moment.
+          {" "}Check your <Link to="/dashboard">dashboard</Link> in a moment.
         </div>
       )}
 

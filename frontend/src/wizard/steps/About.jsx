@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate, useOutletContext } from "react-router-dom";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { api } from "../../api.js";
 
 export default function About() {
-  const { user, draft, refreshDraft } = useOutletContext();
+  const { draft, refreshDraft } = useOutletContext();
   const a = draft.applicant || {};
   const [form, setForm] = useState({
     first_name: a.first_name || "", last_name: a.last_name || "", country: a.country || "Canada",
@@ -21,9 +21,9 @@ export default function About() {
     if (applicant.latitude !== "") applicant.latitude = parseFloat(applicant.latitude); else delete applicant.latitude;
     if (applicant.longitude !== "") applicant.longitude = parseFloat(applicant.longitude); else delete applicant.longitude;
     try {
-      await api.patchDraft(user, { applicant });
+      await api.patchDraft({ applicant });
       await refreshDraft();
-      navigate(`/setup/${user}/lanes`);
+      navigate("/setup/lanes");
     } catch (err) {
       setError(err.message);
     }
@@ -58,7 +58,6 @@ export default function About() {
         </fieldset>
 
         <div className="wizard-actions">
-          <Link className="button ghost" to="/setup/start">Back</Link>
           <button type="submit" className="primary">Continue</button>
         </div>
       </form>

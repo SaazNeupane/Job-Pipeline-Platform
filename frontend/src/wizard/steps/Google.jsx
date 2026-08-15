@@ -1,102 +1,76 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useOutletContext } from "react-router-dom";
+import { useEffect } from "react";
+import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { api } from "../../api.js";
 import Loading from "../../components/Loading.jsx";
 import { useApiData } from "../../hooks/useApiData.js";
 
+const ERROR_MESSAGES = {
+  expired_state: "That connection attempt expired. Try again.",
+  exchange_failed: "Google didn't confirm the connection. Try again.",
+  access_denied: "You didn't finish granting access. Try again when ready.",
+};
+
 export default function Google() {
-  const { user, refreshDraft } = useOutletContext();
-  const { data: state, error, setError, setData: setState } = useApiData(() => api.googleState(user), [user]);
-  const [status, setStatus] = useState("");
+  const { refreshDraft } = useOutletContext();
   const navigate = useNavigate();
-  const pollRef = useRef(null);
+  const [searchParams] = useSearchParams();
+  const { data: state, error, setError, reload } = useApiData(() => api.googleOAuthStatus(), []);
 
+  // Google redirects the BROWSER back to the backend's /api/oauth/google/callback, which
+  // then redirects here with ?connected=1 or ?error=... on the query string -- re-check the
+  // real status against the backend rather than trusting the query string alone (a stale
+  // bookmark/refresh shouldn't show a false "connected").
   useEffect(() => {
-    return () => clearTimeout(pollRef.current);
-  }, []);
-
-  async function uploadFile(e) {
-    e.preventDefault();
-    setError("");
-    const file = e.target.elements.client_secret.files[0];
-    if (!file) return;
-    try {
-      await api.uploadClientSecret(user, file);
-      setState((prev) => ({ ...prev, has_client_secret: true }));
-    } catch (err) {
-      setError(err.message);
+    if (searchParams.get("connected") || searchParams.get("error")) {
+      reload();
     }
-  }
+  }, [searchParams, reload]);
 
   async function connect() {
-    setStatus("Opening your browser to sign in. If no tab opens within a few seconds, check the terminal window running this app for a link to open manually. Finish the consent screen there, then come back to this tab. This will time out after 1 minute if nothing happens, so you can retry.");
+    setError("");
     try {
-      await api.connectGoogle(user);
-      poll();
+      const { authorization_url } = await api.googleOAuthStart();
+      window.location.href = authorization_url;
     } catch (err) {
       setError(err.message);
     }
   }
 
-  function poll() {
-    api.googleStatus(user).then(async (data) => {
-      if (data.status === "done") {
-        setStatus(`Connected as ${data.email}. Continuing…`);
-        await refreshDraft();
-        navigate(`/setup/${user}/review`);
-      } else if (data.status === "error") {
-        setStatus(`${data.error} Click "Connect Google Account" to try again.`);
-      } else {
-        pollRef.current = setTimeout(poll, 2000);
-      }
-    });
+  async function continueToReview() {
+    await refreshDraft();
+    navigate("/setup/review");
   }
 
   if (!state) return <Loading />;
+
+  const oauthError = searchParams.get("error");
 
   return (
     <>
       <h1>Connect your Google account</h1>
       <p className="lede">The pipeline reads and writes a Google Sheet, sends application emails from your Gmail, and stores held resumes on your Drive, all under your own account, never anyone else's.</p>
 
-      <div className="card">
-        <ol className="steps-list" style={{ marginTop: 0 }}>
-          <li>Go to <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud Console → New Project</a> and create one (any name).</li>
-          <li>
-            With that project selected, enable these three APIs (click each, then "Enable"):
-            <ul>
-              <li><a href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">Google Sheets API</a></li>
-              <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail API</a></li>
-              <li><a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noopener">Google Drive API</a></li>
-            </ul>
-          </li>
-          <li>Go to <a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noopener">OAuth consent screen</a>, choose "External", fill in the required fields, and under "Test users" click "Add users" and enter the exact Google account email you'll use to click "Connect Google Account" below. Without this step, Google will reject the connection with an "access blocked" error, since the app stays unpublished/"Testing" the whole time you use this pipeline.</li>
-          <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials → Create Credentials → OAuth client ID</a>, application type <strong>Desktop app</strong>, then click "Download JSON" on the client you created.</li>
-          <li>Upload that downloaded file below.</li>
-        </ol>
-      </div>
-
       {error && <p className="error-banner">{error}</p>}
+      {oauthError && <p className="error-banner">{ERROR_MESSAGES[oauthError] || "Couldn't connect. Try again."}</p>}
 
-      <fieldset>
-        <legend>Upload client_secret.json</legend>
-        <form onSubmit={uploadFile}>
-          <label>File<input type="file" name="client_secret" accept=".json" required /></label>
-          <div className="wizard-actions"><button type="submit">Upload</button></div>
-        </form>
-      </fieldset>
-
-      {state.has_client_secret && (
+      {state.connected ? (
         <fieldset>
-          <legend>✓ File uploaded: connect your account</legend>
-          <div className="wizard-actions"><button type="button" className="primary" onClick={connect}>Connect Google Account</button></div>
-          {status && <p className="hint">{status}</p>}
+          <legend>✓ Connected as {state.email}</legend>
+          <div className="wizard-actions">
+            <button type="button" onClick={connect}>Reconnect a different account</button>
+            <button type="button" className="primary" onClick={continueToReview}>Continue</button>
+          </div>
+        </fieldset>
+      ) : (
+        <fieldset>
+          <legend>Connect your Google account</legend>
+          <p className="hint">Clicking below takes you to Google's own sign-in and consent screen, then brings you back here.</p>
+          <div className="wizard-actions">
+            <button type="button" className="ghost" onClick={() => navigate("/setup/keys")}>Back</button>
+            <button type="button" className="primary" onClick={connect}>Connect Google Account</button>
+          </div>
         </fieldset>
       )}
-
-      <div className="wizard-actions">
-        <button type="button" className="ghost" onClick={() => navigate(`/setup/${user}/keys`)}>Back</button>
-      </div>
     </>
   );
 }

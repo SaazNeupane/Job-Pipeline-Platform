@@ -20,7 +20,7 @@ from google.auth.exceptions import RefreshError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.db import SessionLocal, get_db
@@ -146,12 +146,38 @@ def google_oauth_start(user: User = Depends(get_current_user)):
 
 
 @app.get("/api/oauth/google/callback")
-def google_oauth_callback(code: str, state: str):
+def google_oauth_callback(code: str = "", state: str = "", error: str = ""):
+    """Google redirects the actual BROWSER here, not a JS fetch() call -- there's no
+    Authorization header available and no useful way to hand back JSON, since the browser
+    just lands on this URL directly. Redirects back into the frontend instead, which reads
+    the outcome from the query string and then calls /api/oauth/google/status (below) to
+    confirm rather than trusting the query string alone -- e.g. after a page refresh."""
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+    target = f"{frontend_origin}/setup/google"
+
+    if error:
+        return RedirectResponse(f"{target}?error={error}")
+
     user_id = _oauth_state.pop(state, None)
     if user_id is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Unknown or expired OAuth state")
-    credential = pipeline_google_auth.exchange_code_for_credential(user_id, code)
-    return {"connected": True, "scopes": credential.scopes}
+        return RedirectResponse(f"{target}?error=expired_state")
+    try:
+        pipeline_google_auth.exchange_code_for_credential(user_id, code)
+    except Exception:  # noqa: BLE001 -- surfaced to the user via the redirect, not a crash
+        return RedirectResponse(f"{target}?error=exchange_failed")
+    return RedirectResponse(f"{target}?connected=1")
+
+
+@app.get("/api/oauth/google/status")
+def google_oauth_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.models import OAuthCredential
+
+    row = db.query(OAuthCredential).filter(
+        OAuthCredential.user_id == user.id, OAuthCredential.provider == "google"
+    ).one_or_none()
+    if row is None:
+        return {"connected": False}
+    return {"connected": True, "email": row.granted_email, "scopes": row.scopes}
 
 
 # ---------------------------------------------------------------------------

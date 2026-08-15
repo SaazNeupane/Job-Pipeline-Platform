@@ -3,7 +3,7 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import { api } from "../../api.js";
 
 export default function Keys() {
-  const { user, draft, refreshDraft } = useOutletContext();
+  const { draft, refreshDraft } = useOutletContext();
   const s = draft.secrets || {};
   const [form, setForm] = useState({
     adzuna_app_id: s.ADZUNA_APP_ID || "", adzuna_app_key: s.ADZUNA_APP_KEY || "", gemini_api_key: s.GEMINI_API_KEY || "",
@@ -16,9 +16,9 @@ export default function Keys() {
     e.preventDefault();
     setError("");
     try {
-      await api.patchDraft(user, { secrets: form });
+      await api.patchDraft({ secrets: form });
       await refreshDraft();
-      navigate(`/setup/${user}/google`);
+      navigate("/setup/google");
     } catch (err) {
       setError(err.message);
     }
@@ -42,7 +42,7 @@ export default function Keys() {
           <label>API key<input value={form.gemini_api_key} onChange={set("gemini_api_key")} required /></label>
         </fieldset>
         <div className="wizard-actions">
-          <button type="button" className="ghost" onClick={() => navigate(`/setup/${user}/resume`)}>Back</button>
+          <button type="button" className="ghost" onClick={() => navigate("/setup/resume")}>Back</button>
           <button type="submit" className="primary">Continue</button>
         </div>
       </form>

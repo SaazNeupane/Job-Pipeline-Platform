@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate, useOutletContext } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../../api.js";
 import Loading from "../../components/Loading.jsx";
 
 export default function Review() {
-  const { user } = useOutletContext();
   const navigate = useNavigate();
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
@@ -12,22 +11,22 @@ export default function Review() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    api.review(user)
+    api.review()
       .then(setPreview)
       .catch((e) => {
         if (e.message.toLowerCase().includes("connect google")) setNeedsGoogle(true);
         else setError(e.message);
       });
-  }, [user]);
+  }, []);
 
-  if (needsGoogle) return <Navigate to={`/setup/${user}/google`} replace />;
+  if (needsGoogle) return <Navigate to="/setup/google" replace />;
 
   async function save() {
     setSaving(true);
     setError("");
     try {
-      await api.finalize(user);
-      navigate(`/setup/${user}/push`);
+      await api.finalize();
+      navigate("/setup/done");
     } catch (err) {
       setError(err.message);
       setSaving(false);
@@ -53,7 +52,7 @@ export default function Review() {
             </div>
           ))}
           <div className="wizard-actions">
-            <button type="button" className="ghost" onClick={() => navigate(`/setup/${user}/google`)} disabled={saving}>Back</button>
+            <button type="button" className="ghost" onClick={() => navigate("/setup/google")} disabled={saving}>Back</button>
             <button className="primary" onClick={save} disabled={saving}>
               {saving ? "Saving…" : "Save and create my Google Sheet"}
             </button>
