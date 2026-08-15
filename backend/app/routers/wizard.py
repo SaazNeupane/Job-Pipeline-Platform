@@ -17,6 +17,7 @@ from app.db import get_db
 from app.models import OAuthCredential, Profile as ProfileRow, Secret, User, WizardDraft
 from pipeline import setup_sheet
 from pipeline import wizard as wizard_logic
+from pipeline.geocode import geocode_address
 
 router = APIRouter(prefix="/api/wizard", tags=["wizard"])
 
@@ -65,6 +66,21 @@ def patch_draft(body: dict, user: User = Depends(get_current_user), db: Session 
     row.draft_json = draft
     db.commit()
     return draft
+
+
+@router.post("/geocode")
+def geocode(body: dict, user: User = Depends(get_current_user)):
+    address = str(body.get("address", "")).strip()
+    if not address:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Address is required.")
+    try:
+        result = geocode_address(address)
+    except Exception as exc:  # noqa: BLE001 -- external service failure, surfaced not crashed
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Couldn't look up that address: {exc}")
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Couldn't find that address -- check the spelling, or enter coordinates directly.")
+    latitude, longitude = result
+    return {"latitude": latitude, "longitude": longitude}
 
 
 @router.post("/resume/import")

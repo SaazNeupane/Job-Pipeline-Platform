@@ -74,10 +74,12 @@ function laneExperienceCounts(experience, laneNames) {
   return counts;
 }
 
-function fromInitial(resume) {
+function fromInitial(resume, applicant) {
   const r = resume || {};
+  const a = applicant || {};
+  const applicantName = `${a.first_name || ""} ${a.last_name || ""}`.trim();
   return {
-    name: r.name || "",
+    name: r.name || applicantName,
     phone: (r.contact || {}).phone || "",
     email: (r.contact || {}).email || "",
     website: (r.contact || {}).website || "",
@@ -120,7 +122,7 @@ export default function Resume() {
   const navigate = useNavigate();
   const laneNames = draft.lane_names || [];
   const laneLabels = draft.lane_labels || {};
-  const [r, setR] = useState(() => fromInitial(draft.shared_resume));
+  const [r, setR] = useState(() => fromInitial(draft.shared_resume, draft.applicant));
   const [error, setError] = useState("");
   // One section on screen at a time -- the old single-page form (contact +
   // education + experience + skills + projects + interests, all at once)
@@ -203,7 +205,7 @@ export default function Resume() {
               Enter your real work history once. On later steps you'll tick which job type(s) each entry applies to.
               An entry only tagged to one job type won't show up on another job type's resume.
             </p>
-            <ImportFromPdf onImported={(resume) => { setR(fromInitial(resume)); setSection((s) => s + 1); }} />
+            <ImportFromPdf onImported={(resume) => { setR(fromInitial(resume, draft.applicant)); setSection((s) => s + 1); }} />
             <p className="hint">Or skip this and fill it in by hand on the next steps.</p>
           </>
         )}

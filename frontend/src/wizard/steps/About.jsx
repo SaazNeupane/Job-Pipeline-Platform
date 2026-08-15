@@ -7,8 +7,10 @@ export default function About() {
   const a = draft.applicant || {};
   const [form, setForm] = useState({
     first_name: a.first_name || "", last_name: a.last_name || "", country: a.country || "Canada",
-    latitude: a.latitude ?? "", longitude: a.longitude ?? "",
+    address: a.address || "", latitude: a.latitude ?? "", longitude: a.longitude ?? "",
   });
+  const [manualCoords, setManualCoords] = useState(Boolean(a.latitude) && !a.address);
+  const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
@@ -17,7 +19,23 @@ export default function About() {
   async function submit(e) {
     e.preventDefault();
     setError("");
+
     const applicant = { ...form };
+    if (!manualCoords && form.address.trim()) {
+      setGeocoding(true);
+      try {
+        const { latitude, longitude } = await api.geocode(form.address.trim());
+        applicant.latitude = latitude;
+        applicant.longitude = longitude;
+      } catch (err) {
+        setGeocoding(false);
+        setError(err.message);
+        setManualCoords(true);
+        return;
+      }
+      setGeocoding(false);
+    }
+
     if (applicant.latitude !== "") applicant.latitude = parseFloat(applicant.latitude); else delete applicant.latitude;
     if (applicant.longitude !== "") applicant.longitude = parseFloat(applicant.longitude); else delete applicant.longitude;
     try {
@@ -45,20 +63,33 @@ export default function About() {
         </fieldset>
 
         <fieldset>
-          <legend>Coordinates (optional, only needed for a commute-radius lane)</legend>
-          <div className="grid2">
-            <label>Latitude<input value={form.latitude} onChange={set("latitude")} placeholder="e.g. 43.7315" /></label>
-            <label>Longitude<input value={form.longitude} onChange={set("longitude")} placeholder="e.g. -79.7624" /></label>
-          </div>
-          <p className="hint">
-            Only needed if you pick a lane with a commute-radius filter. Look up your address on{" "}
-            <a href="https://www.google.com/maps" target="_blank" rel="noopener">Google Maps</a>, right-click your
-            location, and the coordinates are the first thing in the menu.
-          </p>
+          <legend>Address (optional, only needed for a commute-radius lane)</legend>
+          {!manualCoords ? (
+            <>
+              <label>Address<input value={form.address} onChange={set("address")} placeholder="e.g. 123 Main St, Toronto, ON" /></label>
+              <p className="hint">
+                Only needed if you pick a lane with a commute-radius filter. Looked up automatically when you continue —
+                nothing to copy or paste.
+              </p>
+              <button type="button" className="ghost" onClick={() => setManualCoords(true)}>
+                Enter coordinates directly instead
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="grid2">
+                <label>Latitude<input value={form.latitude} onChange={set("latitude")} placeholder="e.g. 43.7315" /></label>
+                <label>Longitude<input value={form.longitude} onChange={set("longitude")} placeholder="e.g. -79.7624" /></label>
+              </div>
+              <button type="button" className="ghost" onClick={() => setManualCoords(false)}>
+                Use an address instead
+              </button>
+            </>
+          )}
         </fieldset>
 
         <div className="wizard-actions">
-          <button type="submit" className="primary">Continue</button>
+          <button type="submit" className="primary" disabled={geocoding}>{geocoding ? "Looking up address…" : "Continue"}</button>
         </div>
       </form>
     </>

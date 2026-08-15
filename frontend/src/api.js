@@ -92,6 +92,7 @@ export const api = {
   lanePresets: () => get("/api/wizard/lane-presets"),
   wizardDraft: () => get("/api/wizard/draft"),
   patchDraft: (body) => patch("/api/wizard/draft", body),
+  geocode: (address) => post("/api/wizard/geocode", { address }),
   submitLanes: (body) => post("/api/wizard/lanes", body),
   importResume: (file, geminiApiKey) => upload("/api/wizard/resume/import", file, "resume_pdf", { gemini_api_key: geminiApiKey }),
   review: () => get("/api/wizard/review"),

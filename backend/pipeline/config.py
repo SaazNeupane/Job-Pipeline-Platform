@@ -82,6 +82,7 @@ class Applicant:
     country: str
     latitude: float | None = None
     longitude: float | None = None
+    address: str = ""
 
 
 @dataclass

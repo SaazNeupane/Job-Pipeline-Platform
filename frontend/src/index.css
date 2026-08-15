@@ -1,91 +1,95 @@
 /* Design tokens -----------------------------------------------------------
-   Palette named after the pipeline metaphor the whole app is built around:
-   postings move forward through stages (found -> matched -> tailored ->
-   held for review -> applied). "signal" is the one warm accent used for
-   anything active/interactive -- deliberately not the generic indigo SaaS
-   default. "pine" marks completion (applied), "amber" marks something
-   waiting on you (held for review). */
+   Terminal / console palette: postings move through a pipeline the same way
+   a build or CI pipeline moves through stages on a console, reported in the
+   same monospace voice a real terminal would use. "redline" (kept as the
+   variable name, now a bright phosphor green rather than a literal red) is
+   the one accent used for anything active/interactive -- the brightest
+   thing on screen, like a live cursor. "approved" marks completion
+   (applied), a calmer confirm-green; "pending" marks something waiting on
+   you, terminal amber -- the one deliberate hue break from green, same as a
+   real console's caution light. Dark mode is a true near-black terminal;
+   light mode is a "green-bar printout" variant of the same identity rather
+   than an unrelated theme. */
 :root {
-  --paper: #f6f4ef;
+  --paper: #f4faf3;
   --surface: #ffffff;
-  --surface-alt: #fbfaf7;
-  --ink: #1b1e24;
-  --ink-soft: #5b606b;
-  --ink-faint: #90939c;
-  --wire: #ddd6c9;
-  --wire-strong: #c9c0af;
+  --surface-alt: #eaf5ea;
+  --ink: #103319;
+  --ink-soft: #3c6b49;
+  --ink-faint: #7a9e82;
+  --wire: #cfe6d2;
+  --wire-strong: #a9cdaf;
 
-  --signal: #ff6a3d;
-  --signal-strong: #e6532a;
-  --signal-soft: #ffe3d5;
-  --pine: #1f7a5c;
-  --pine-soft: #e1f3ea;
-  --amber: #ad7a1c;
-  --amber-soft: #faf0d9;
-  --danger: #c0392b;
-  --danger-soft: #fbe9e7;
+  --redline: #1e9e4a;
+  --redline-strong: #157a38;
+  --redline-soft: #ddf3e1;
+  --approved: #0e7c86;
+  --approved-soft: #dceef0;
+  --pending: #b5790c;
+  --pending-soft: #f6e9d2;
+  --danger: #b23325;
+  --danger-soft: #f8ddd8;
 
-  --radius: 14px;
-  --radius-sm: 9px;
-  --shadow: 0 1px 2px rgba(30, 20, 5, 0.04), 0 14px 32px -18px rgba(30, 20, 5, 0.22);
-  --shadow-strong: 0 4px 20px -10px rgba(30, 20, 5, 0.32);
+  --radius: 4px;
+  --radius-sm: 2px;
+  --shadow: 0 1px 2px rgba(10, 30, 15, 0.04), 0 10px 24px -16px rgba(10, 30, 15, 0.16);
+  --shadow-strong: 0 4px 16px -8px rgba(10, 30, 15, 0.26);
 
-  --font-body: -apple-system, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+  --font-body: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
-  /* Display face for page titles and the swipe deck's role headline --
-     a real serif (not the sans body face) gives the "paper" metaphor an
-     actual printed-ledger feel instead of staying generic system-sans
-     throughout. System stack only, no network font request -- this is a
-     local-first tool. */
-  --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", "URW Palladio", serif;
+  /* Display face for page titles, the swipe deck's role headline, and the
+     eyebrow labels -- monospace, deliberately, the app's one typographic
+     signature read as console/terminal output rather than a literary
+     serif or a generic geometric sans. */
+  --font-display: var(--font-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #14171c;
-    --surface: #1b1e24;
-    --surface-alt: #20242b;
-    --ink: #f2f0ea;
-    --ink-soft: #a8adb8;
-    --ink-faint: #6b7078;
-    --wire: #333841;
-    --wire-strong: #454b56;
+    --paper: #070b08;
+    --surface: #0c150e;
+    --surface-alt: #0a120b;
+    --ink: #f1f5f2;
+    --ink-soft: #a9bfae;
+    --ink-faint: #62786a;
+    --wire: #1d3324;
+    --wire-strong: #2c4d37;
 
-    --signal: #ff8258;
-    --signal-strong: #ff9c78;
-    --signal-soft: #3a2117;
-    --pine: #3fb589;
-    --pine-soft: #123023;
-    --amber: #e2ab48;
-    --amber-soft: #33270a;
-    --danger: #e2685a;
-    --danger-soft: #3a1a16;
+    --redline: #39ff14;
+    --redline-strong: #7dff5c;
+    --redline-soft: #123016;
+    --approved: #2fd98a;
+    --approved-soft: #0e2b1e;
+    --pending: #ffb000;
+    --pending-soft: #2e2308;
+    --danger: #ff4433;
+    --danger-soft: #2e1310;
 
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 32px -18px rgba(0, 0, 0, 0.6);
-    --shadow-strong: 0 4px 20px -8px rgba(0, 0, 0, 0.7);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 32px -18px rgba(0, 0, 0, 0.7);
+    --shadow-strong: 0 4px 20px -8px rgba(0, 0, 0, 0.8);
   }
 }
 
 :root[data-theme="dark"] {
-  --paper: #14171c;
-  --surface: #1b1e24;
-  --surface-alt: #20242b;
-  --ink: #f2f0ea;
-  --ink-soft: #a8adb8;
-  --ink-faint: #6b7078;
-  --wire: #333841;
-  --wire-strong: #454b56;
-  --signal: #ff8258;
-  --signal-strong: #ff9c78;
-  --signal-soft: #3a2117;
-  --pine: #3fb589;
-  --pine-soft: #123023;
-  --amber: #e2ab48;
-  --amber-soft: #33270a;
-  --danger: #e2685a;
-  --danger-soft: #3a1a16;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 32px -18px rgba(0, 0, 0, 0.6);
-  --shadow-strong: 0 4px 20px -8px rgba(0, 0, 0, 0.7);
+  --paper: #070b08;
+  --surface: #0c150e;
+  --surface-alt: #0a120b;
+  --ink: #f1f5f2;
+  --ink-soft: #a9bfae;
+  --ink-faint: #62786a;
+  --wire: #1d3324;
+  --wire-strong: #2c4d37;
+  --redline: #39ff14;
+  --redline-strong: #7dff5c;
+  --redline-soft: #123016;
+  --approved: #2fd98a;
+  --approved-soft: #0e2b1e;
+  --pending: #ffb000;
+  --pending-soft: #2e2308;
+  --danger: #ff4433;
+  --danger-soft: #2e1310;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 14px 32px -18px rgba(0, 0, 0, 0.7);
+  --shadow-strong: 0 4px 20px -8px rgba(0, 0, 0, 0.8);
 }
 
 * {
@@ -99,11 +103,6 @@ html {
 body {
   margin: 0;
   background-color: var(--paper);
-  /* Faint paper grain -- reinforces the "paper"/ledger metaphor the
-     palette is already named after, quiet enough to read as texture
-     rather than decoration. Pure CSS, no image asset. */
-  background-image: radial-gradient(rgba(120, 110, 90, 0.05) 1px, transparent 1px);
-  background-size: 3px 3px;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 16px;
@@ -111,22 +110,38 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Faint scanline texture, dark mode only -- a real CRT/terminal cue, quiet
+   enough to read as texture rather than decoration. Skipped in light mode,
+   where it would just look like a bug. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body {
+    background-image: repeating-linear-gradient(
+      to bottom, rgba(57, 255, 20, 0.025) 0px, rgba(57, 255, 20, 0.025) 1px, transparent 1px, transparent 3px
+    );
+  }
+}
+:root[data-theme="dark"] body {
+  background-image: repeating-linear-gradient(
+    to bottom, rgba(57, 255, 20, 0.025) 0px, rgba(57, 255, 20, 0.025) 1px, transparent 1px, transparent 3px
+  );
+}
+
 h1, h2, h3, h4 {
-  font-family: var(--font-body);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0 0 0.5em;
   color: var(--ink);
 }
 
-h1 { font-family: var(--font-display); font-weight: 400; font-size: 2.1rem; letter-spacing: -0.005em; }
-h2 { font-size: 1.3rem; margin-top: 2rem; }
-h3 { font-size: 1.05rem; margin-top: 1.5rem; }
+h1 { font-weight: 600; font-size: 2.1rem; letter-spacing: -0.01em; }
+h2 { font-size: 1.25rem; margin-top: 2rem; }
+h3 { font-size: 1rem; margin-top: 1.5rem; }
 
 p { margin: 0 0 1em; }
 
 a {
-  color: var(--signal-strong);
+  color: var(--redline-strong);
   text-decoration: none;
 }
 a:hover { text-decoration: underline; }
@@ -140,10 +155,8 @@ code {
   padding: 0.1em 0.4em;
 }
 
-/* Eyebrow / label voice: tracked uppercase monospace, used sparingly for
-   stage labels, counts, and status pills -- the one deliberate typographic
-   signature that ties back to the "pipeline" mark and mirrors the flow
-   rail's own connective-tissue role. */
+/* Eyebrow / label voice: tracked uppercase monospace, used for stage
+   labels, counts, and status pills -- the app's console-output signature. */
 .eyebrow {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -165,7 +178,7 @@ code {
 }
 
 *:focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid var(--redline);
   outline-offset: 2px;
   border-radius: 4px;
 }

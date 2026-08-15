@@ -1,8 +1,7 @@
-import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import Logo from "./components/Logo.jsx";
 import ToastHost from "./components/ToastHost.jsx";
 import Home from "./pages/Home.jsx";
-import Guide from "./pages/Guide.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import Dashboard from "./dashboard/Dashboard.jsx";
@@ -48,14 +47,14 @@ export default function App() {
           Job Pipeline
         </Link>
         <div className="topbar-right">
-          <Link to="/guide" className="topbar-link">Guide</Link>
+          <Link to="/#guide" className="topbar-link">Guide</Link>
           <AccountLink />
         </div>
       </header>
       <main className={`container${isDashboard ? " wide" : ""}`}>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/guide" element={<Guide />} />
+          <Route path="/guide" element={<Navigate to="/#guide" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/setup" element={<ProtectedRoute><WizardLayout /></ProtectedRoute>}>
