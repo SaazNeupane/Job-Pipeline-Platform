@@ -1,0 +1,31 @@
+name: daily-pipeline-trigger
+
+# Repurposed from the old single-tenant workflow: this no longer runs the pipeline itself
+# (that now happens on the hosted backend, which has the DB/credentials). It only triggers
+# it, once per active user, via the backend's internal endpoints -- see
+# backend/app/main.py's /api/internal/active-users and /api/internal/run/{user_id}.
+# Staying on GitHub Actions for this (rather than a paid hosted cron/worker) is the free-tier
+# lever the plan is built around.
+
+on:
+  schedule:
+    - cron: "30 14 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch active users and trigger a run for each
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          INTERNAL_SHARED_SECRET: ${{ secrets.INTERNAL_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          user_ids=$(curl -sf -H "X-Internal-Secret: $INTERNAL_SHARED_SECRET" \
+            "$BACKEND_URL/api/internal/active-users" | jq -r '.user_ids[]')
+          for user_id in $user_ids; do
+            echo "Triggering run for $user_id"
+            curl -sf -X POST -H "X-Internal-Secret: $INTERNAL_SHARED_SECRET" \
+              "$BACKEND_URL/api/internal/run/$user_id" || echo "Run failed for $user_id, continuing"
+          done

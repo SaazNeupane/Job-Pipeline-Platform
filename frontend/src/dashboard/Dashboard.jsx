@@ -1,0 +1,445 @@
+import { useEffect, useMemo, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { api } from "../api.js";
+import Collapsible from "../components/Collapsible.jsx";
+import Loading from "../components/Loading.jsx";
+import LaneSection from "../components/LaneSection.jsx";
+import { useApiData } from "../hooks/useApiData.js";
+import { sourceLabel } from "../sourceLabels.js";
+
+// profile.yaml's github_repo has been saved both ways in the wild -- a
+// plain "owner/repo" (what the wizard writes) and a full clone URL like
+// "https://github.com/owner/repo.git" (what a manual `set-repo` or hand
+// edit can produce). Normalize both down to "owner/repo" for display so
+// the dashboard never shows a raw .git URL next to the Run now button.
+function repoLabel(repo) {
+  return repo.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "");
+}
+function repoUrl(repo) {
+  return `https://github.com/${repoLabel(repo)}`;
+}
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // clipboard API unavailable (e.g. non-HTTPS context) -- fail silently,
+      // the text is already right there to select by hand
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <button type="button" className="ghost copy-btn" onClick={copy}>
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRetry, open, onToggleOpen, applied, busy }) {
+  const generating = row.reason_held === "generating";
+  const failed = (row.reason_held || "").startsWith("generation_failed");
+  return (
+    <div className={`posting-card ${applied ? "posting-card--applied" : "posting-card--pending"}${selected ? " selected" : ""}`}>
+      <div className="posting-card-top">
+        {!applied && (
+          <label className="posting-select">
+            <input type="checkbox" checked={selected} onChange={(e) => onToggleSelect(e.target.checked)} disabled={!!busy || generating} />
+          </label>
+        )}
+        <div className="posting-main">
+          <div className="posting-company">{row.company}</div>
+          <div className="posting-role">{row.role}</div>
+          <div className="posting-meta">
+            {generating && (
+              <span className="badge signal spinner-badge">
+                <span className="spinner" />Tailoring resume &amp; cover letter…
+                <button type="button" className="badge-retry" onClick={onRetry} disabled={!!busy} title="Stuck? Try again">retry</button>
+              </span>
+            )}
+            {failed && (
+              <span className="badge danger" title={row.reason_held}>
+                Generation failed
+                <button type="button" className="badge-retry" onClick={onRetry} disabled={!!busy}>{busy === "retry" ? "retrying…" : "retry"}</button>
+              </span>
+            )}
+            {row.source && <span className="badge">{sourceLabel(row.source)}</span>}
+            {row.location && <span className="badge">{row.location}</span>}
+            {row.required_years && <span className="badge">{row.required_years}+ yrs exp</span>}
+            {applied && <span className="badge pine">{row.application_status}</span>}
+            <span className="hint">
+              {applied ? "applied" : "found"} {row.date}
+              {row.posted_date ? ` · posted ${row.posted_date.slice(0, 10)}` : ""}
+            </span>
+          </div>
+        </div>
+        <div className="posting-actions">
+          {(row.application_url || row.resume_link || row.cover_letter) && (
+            <button type="button" className="secondary" onClick={onToggleOpen} disabled={!!busy}>{open ? "Hide" : "Details"}</button>
+          )}
+          {!applied && (
+            <>
+              <button type="button" onClick={onPromote} disabled={!!busy || generating} title={generating ? "Still tailoring your resume and cover letter" : undefined}>{busy === "promote" ? "Working…" : "Mark applied"}</button>
+              <button type="button" className="danger" onClick={onDismiss} disabled={!!busy}>{busy === "dismiss" ? "Working…" : "Dismiss"}</button>
+            </>
+          )}
+        </div>
+      </div>
+      {open && (
+        <div className="detail-panel">
+          <div className="detail-panel-links">
+            {row.application_url && <a className="button" href={row.application_url} target="_blank" rel="noopener">View posting &amp; apply</a>}
+            {row.resume_link && <a className="button secondary" href={row.resume_link} target="_blank" rel="noopener">Open tailored resume</a>}
+          </div>
+          {row.cover_letter && (
+            <>
+              <div className="detail-panel-heading">
+                <h4>Cover letter</h4>
+                <CopyButton text={row.cover_letter} />
+              </div>
+              <pre className="code-block">{row.cover_letter}</pre>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GoogleReconnectBanner({ user, onReconnected }) {
+  const [status, setStatus] = useState("idle"); // idle | pending | error
+
+  useEffect(() => {
+    if (status !== "pending") return;
+    const id = setInterval(async () => {
+      const res = await api.dashboardGoogleReconnectStatus(user);
+      if (res.status === "done") {
+        clearInterval(id);
+        onReconnected();
+      } else if (res.status === "error") {
+        clearInterval(id);
+        setStatus("error");
+      }
+    }, 1500);
+    return () => clearInterval(id);
+  }, [status, user, onReconnected]);
+
+  async function reconnect() {
+    setStatus("pending");
+    try {
+      await api.dashboardGoogleReconnect(user);
+    } catch {
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className="error-banner">
+      <p>Your Google connection expired -- Sheets/Gmail/Drive calls can't go through until you reconnect.</p>
+      {status === "pending" ? (
+        <p>A browser window should have opened for you to sign in with Google. Waiting for you to finish…</p>
+      ) : (
+        <button type="button" onClick={reconnect}>Reconnect Google</button>
+      )}
+      {status === "error" && <p>Reconnect didn't finish. Try again, or re-run the setup wizard's Google step.</p>}
+    </div>
+  );
+}
+
+export default function Dashboard() {
+  const { user } = useParams();
+  const { data, error, errorCode, setError, reload: load } = useApiData(() => api.dashboard(user), [user]);
+  const [selected, setSelected] = useState(new Set());
+  const [openDetail, setOpenDetail] = useState(null);
+  const [repoInput, setRepoInput] = useState("");
+  const [runStatus, setRunStatus] = useState("");
+  const [laneFilter, setLaneFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [busyRows, setBusyRows] = useState({}); // posting_key -> "promote" | "dismiss"
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [runLane, setRunLane] = useState("");
+  const [runDays, setRunDays] = useState("");
+
+  // A right-swipe writes its pending_approval row immediately
+  // (reason_held="generating") and fills in the resume/cover letter a few
+  // seconds later in a background thread (see swipe_actions.py). Poll while
+  // any row is still in that state so the "Generating..." badge clears on
+  // its own instead of needing a manual page reload.
+  const stillGenerating = data?.pending.some((r) => r.reason_held === "generating");
+  useEffect(() => {
+    if (!stillGenerating) return;
+    const id = setInterval(load, 4000);
+    return () => clearInterval(id);
+  }, [stillGenerating, load]);
+
+  const matchesFilters = (row) => {
+    if (laneFilter !== "all" && row.lane !== laneFilter) return false;
+    if (sourceFilter !== "all" && row.source !== sourceFilter) return false;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      const haystack = `${row.company} ${row.role} ${row.location}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  };
+
+  const filteredPendingByLane = useMemo(() => {
+    if (!data) return [];
+    return data.pending_by_lane
+      .map((section) => ({ ...section, rows: section.rows.filter(matchesFilters) }))
+      .filter((section) => section.rows.length);
+  }, [data, laneFilter, sourceFilter, search]);
+
+  const sources = useMemo(() => {
+    if (!data) return [];
+    return [...new Set(data.pending.map((r) => r.source).filter(Boolean))];
+  }, [data]);
+
+  function toggleSelect(key, checked) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      checked ? next.add(key) : next.delete(key);
+      return next;
+    });
+  }
+
+  async function promote(key) {
+    setBusyRows((prev) => ({ ...prev, [key]: "promote" }));
+    try {
+      await api.promote(user, key);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  }
+  async function retry(key) {
+    setBusyRows((prev) => ({ ...prev, [key]: "retry" }));
+    try {
+      await api.retry(user, key);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  }
+  async function dismiss(key) {
+    setBusyRows((prev) => ({ ...prev, [key]: "dismiss" }));
+    try {
+      await api.dismiss(user, key);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  }
+  async function dismissSelected() {
+    if (!selected.size || bulkBusy) return;
+    setBulkBusy(true);
+    try {
+      await api.dismissBulk(user, [...selected]);
+      setSelected(new Set());
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+  async function saveRepo(e) {
+    e.preventDefault();
+    try {
+      await api.setRepo(user, repoInput);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+  async function runNow() {
+    setRunStatus("");
+    const res = await api.runNow(user, { lane: runLane, days: runDays });
+    setRunStatus(res.status);
+    if (res.status === "triggered") setTimeout(() => setRunStatus(""), 6000);
+  }
+
+  if (errorCode === "google_reauth_required") return <GoogleReconnectBanner user={user} onReconnected={load} />;
+  if (error) return <p className="error-banner">{error}</p>;
+  if (!data) return <Loading />;
+
+  return (
+    <>
+      <div className="dash-head">
+        <div>
+          <h1>{user}'s dashboard</h1>
+          <p className="lede">A friendlier view of your Google Sheet. Nothing here is stored separately from it.</p>
+        </div>
+        <div className="dash-head-links">
+          <Link className="button secondary" to={`/cold-email/${user}`}>Cold email</Link>
+          <Link className="button primary" to={`/swipe/${user}`}>
+            Swipe queue{data.swipe_queue_count ? ` (${data.swipe_queue_count})` : ""}
+          </Link>
+        </div>
+      </div>
+
+      {runStatus === "triggered" && <div className="banner info">Triggered. Check GitHub Actions in a minute or two.</div>}
+      {runStatus === "failed" && <div className="banner">Couldn't trigger the run. Make sure the GitHub CLI is installed and logged in (<code>gh auth login</code>), then try again.</div>}
+      {runStatus === "no_repo" && <div className="banner">No repo on file yet. Enter yours below first.</div>}
+
+      <div className="stat-strip">
+        <div className="stat-item">
+          <div className="eyebrow">Needs review</div>
+          <div className="stat-num signal">{data.pending.length}</div>
+        </div>
+        <div className="stat-item">
+          <div className="eyebrow">Applied</div>
+          <div className="stat-num pine">{data.applied.length}</div>
+        </div>
+        <Link className="stat-item stat-item-link" to={`/cold-email/${user}`}>
+          <div className="eyebrow">Cold emails</div>
+          <div className="stat-num">{data.cold_emails.length}</div>
+        </Link>
+        <div className="stat-item">
+          <div className="eyebrow">Runs logged</div>
+          <div className="stat-num">{data.summary.length}</div>
+        </div>
+      </div>
+
+      <div className="run-bar">
+        {data.github_repo ? (
+          <>
+            <div>
+              <div className="eyebrow">Daily run</div>
+              <a href={repoUrl(data.github_repo)} target="_blank" rel="noopener">{repoLabel(data.github_repo)}</a>
+            </div>
+            <div className="run-override">
+              <label>
+                Job type
+                <select value={runLane} onChange={(e) => setRunLane(e.target.value)}>
+                  <option value="">All</option>
+                  {data.lane_names.map((n) => <option key={n} value={n}>{data.lane_labels[n] || n.replace(/_/g, " ")}</option>)}
+                </select>
+              </label>
+              <label>
+                Posted in the last
+                <div className="run-override-days">
+                  <input
+                    type="number" min="1" value={runDays} onChange={(e) => setRunDays(e.target.value)}
+                    placeholder="14"
+                  />
+                  <span>days</span>
+                </div>
+              </label>
+              <span className="hint">Only affects this one run. Leave both blank to run every job type with the normal 14-day window, same as the daily schedule.</span>
+            </div>
+            <button onClick={runNow}>Run now</button>
+          </>
+        ) : (
+          <form onSubmit={saveRepo}>
+            <label>GitHub repo<input value={repoInput} onChange={(e) => setRepoInput(e.target.value)} placeholder="you/Job-Pipeline" required /></label>
+            <button type="submit">Save to enable Run now</button>
+          </form>
+        )}
+      </div>
+
+      <h2 style={{ marginTop: 0 }}>Needs your review</h2>
+
+      {data.pending.length > 0 && (
+        <div className="filter-bar">
+          <button type="button" className={`filter-pill${laneFilter === "all" ? " active" : ""}`} onClick={() => setLaneFilter("all")}>All lanes</button>
+          {data.lane_names.map((n) => (
+            <button key={n} type="button" className={`filter-pill${laneFilter === n ? " active" : ""}`} onClick={() => setLaneFilter(n)}>
+              {data.lane_labels[n] || n.replace(/_/g, " ")}
+            </button>
+          ))}
+          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+            <option value="all">All sources</option>
+            {sources.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
+          </select>
+          <input placeholder="Search company, role, location" value={search} onChange={(e) => setSearch(e.target.value)} />
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="bulk-bar">
+          <span>{selected.size} selected</span>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button type="button" className="secondary" onClick={() => setSelected(new Set())} disabled={bulkBusy}>Clear</button>
+            <button type="button" className="danger" onClick={dismissSelected} disabled={bulkBusy}>{bulkBusy ? "Dismissing…" : "Dismiss selected"}</button>
+          </div>
+        </div>
+      )}
+
+      {filteredPendingByLane.length ? (
+        filteredPendingByLane.map((section) => (
+          <LaneSection key={section.slug} section={section}>
+            <div className="posting-list">
+              {section.rows.map((row) => (
+                <PostingCard
+                  key={row.posting_key} row={row}
+                  selected={selected.has(row.posting_key)}
+                  onToggleSelect={(checked) => toggleSelect(row.posting_key, checked)}
+                  onPromote={() => promote(row.posting_key)}
+                  onDismiss={() => dismiss(row.posting_key)}
+                  onRetry={() => retry(row.posting_key)}
+                  open={openDetail === row.posting_key}
+                  onToggleOpen={() => setOpenDetail(openDetail === row.posting_key ? null : row.posting_key)}
+                  busy={busyRows[row.posting_key]}
+                />
+              ))}
+            </div>
+          </LaneSection>
+        ))
+      ) : (
+        <div className="empty-state">{data.pending.length ? "No postings match these filters." : "Nothing waiting on you right now."}</div>
+      )}
+
+      <h2>Applied</h2>
+      {data.applied.length ? (
+        data.applied_by_lane.map((section) => section.rows.length > 0 && (
+          <LaneSection key={section.slug} section={section} tone="pine">
+            <div className="posting-list">
+              {section.rows.map((row) => (
+                <PostingCard key={row.posting_key} row={row} applied open={false} onToggleOpen={() => {}} />
+              ))}
+            </div>
+          </LaneSection>
+        ))
+      ) : (
+        <div className="empty-state">No applications yet.</div>
+      )}
+
+      <Collapsible title="Recent runs" defaultCollapsed={data.summary.length > 5}>
+        {data.summary.length ? (
+          <div className="runs-table">
+            <table>
+              <thead><tr><th>Date</th><th>New to swipe</th><th>Ready to apply</th><th>Applied</th><th>Emails</th><th>Errors</th></tr></thead>
+              <tbody>
+                {[...data.summary].slice(-14).reverse().map((row, i) => (
+                  <tr key={i}>
+                    <td>{row.date}</td>
+                    <td>{row.queued_count !== "" ? row.queued_count : "n/a"}</td>
+                    <td>{row.awaiting_apply_count !== "" ? row.awaiting_apply_count : "n/a"}</td>
+                    <td>{row.applied_count}</td>
+                    <td>{row.emails_sent}</td>
+                    <td>{row.errors ? <span className="badge amber">{row.errors}</span> : <span className="hint">none</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-state">No runs yet.</div>
+        )}
+      </Collapsible>
+    </>
+  );
+}

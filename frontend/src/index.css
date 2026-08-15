@@ -1,0 +1,178 @@
+/* Design tokens -----------------------------------------------------------
+   Palette named after the pipeline metaphor the whole app is built around:
+   postings move forward through stages (found -> matched -> tailored ->
+   held for review -> applied). "signal" is the one warm accent used for
+   anything active/interactive -- deliberately not the generic indigo SaaS
+   default. "pine" marks completion (applied), "amber" marks something
+   waiting on you (held for review). */
+:root {
+  --paper: #f6f4ef;
+  --surface: #ffffff;
+  --surface-alt: #fbfaf7;
+  --ink: #1b1e24;
+  --ink-soft: #5b606b;
+  --ink-faint: #90939c;
+  --wire: #ddd6c9;
+  --wire-strong: #c9c0af;
+
+  --signal: #ff6a3d;
+  --signal-strong: #e6532a;
+  --signal-soft: #ffe3d5;
+  --pine: #1f7a5c;
+  --pine-soft: #e1f3ea;
+  --amber: #ad7a1c;
+  --amber-soft: #faf0d9;
+  --danger: #c0392b;
+  --danger-soft: #fbe9e7;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --shadow: 0 1px 2px rgba(30, 20, 5, 0.04), 0 14px 32px -18px rgba(30, 20, 5, 0.22);
+  --shadow-strong: 0 4px 20px -10px rgba(30, 20, 5, 0.32);
+
+  --font-body: -apple-system, "Segoe UI", "Inter", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* Display face for page titles and the swipe deck's role headline --
+     a real serif (not the sans body face) gives the "paper" metaphor an
+     actual printed-ledger feel instead of staying generic system-sans
+     throughout. System stack only, no network font request -- this is a
+     local-first tool. */
+  --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", "URW Palladio", serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14171c;
+    --surface: #1b1e24;
+    --surface-alt: #20242b;
+    --ink: #f2f0ea;
+    --ink-soft: #a8adb8;
+    --ink-faint: #6b7078;
+    --wire: #333841;
+    --wire-strong: #454b56;
+
+    --signal: #ff8258;
+    --signal-strong: #ff9c78;
+    --signal-soft: #3a2117;
+    --pine: #3fb589;
+    --pine-soft: #123023;
+    --amber: #e2ab48;
+    --amber-soft: #33270a;
+    --danger: #e2685a;
+    --danger-soft: #3a1a16;
+
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 32px -18px rgba(0, 0, 0, 0.6);
+    --shadow-strong: 0 4px 20px -8px rgba(0, 0, 0, 0.7);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #14171c;
+  --surface: #1b1e24;
+  --surface-alt: #20242b;
+  --ink: #f2f0ea;
+  --ink-soft: #a8adb8;
+  --ink-faint: #6b7078;
+  --wire: #333841;
+  --wire-strong: #454b56;
+  --signal: #ff8258;
+  --signal-strong: #ff9c78;
+  --signal-soft: #3a2117;
+  --pine: #3fb589;
+  --pine-soft: #123023;
+  --amber: #e2ab48;
+  --amber-soft: #33270a;
+  --danger: #e2685a;
+  --danger-soft: #3a1a16;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 32px -18px rgba(0, 0, 0, 0.6);
+  --shadow-strong: 0 4px 20px -8px rgba(0, 0, 0, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background-color: var(--paper);
+  /* Faint paper grain -- reinforces the "paper"/ledger metaphor the
+     palette is already named after, quiet enough to read as texture
+     rather than decoration. Pure CSS, no image asset. */
+  background-image: radial-gradient(rgba(120, 110, 90, 0.05) 1px, transparent 1px);
+  background-size: 3px 3px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.5em;
+  color: var(--ink);
+}
+
+h1 { font-family: var(--font-display); font-weight: 400; font-size: 2.1rem; letter-spacing: -0.005em; }
+h2 { font-size: 1.3rem; margin-top: 2rem; }
+h3 { font-size: 1.05rem; margin-top: 1.5rem; }
+
+p { margin: 0 0 1em; }
+
+a {
+  color: var(--signal-strong);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-alt);
+  border: 1px solid var(--wire);
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+
+/* Eyebrow / label voice: tracked uppercase monospace, used sparingly for
+   stage labels, counts, and status pills -- the one deliberate typographic
+   signature that ties back to the "pipeline" mark and mirrors the flow
+   rail's own connective-tissue role. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.lede {
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  max-width: 60ch;
+}
+
+.hint {
+  color: var(--ink-faint);
+  font-size: 0.88rem;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

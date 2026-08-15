@@ -1,0 +1,148 @@
+"""DB-backed replacement for the old file-based pipeline/config.py. Dataclasses are kept
+byte-for-byte identical to the original (see job-pipeline/pipeline/config.py), and
+load_profile(user)/load_secrets(user) keep the exact same one-argument signature the
+original file-based version had -- every reused pipeline module (search.py, filter.py,
+sheet_log.py, cold_email.py, cover_letter.py, tailor_resume.py, daily_report.py,
+swipe_actions.py, ...) calls load_profile(user)/load_secrets(user) with just the user id and
+was copied over completely unmodified. The DB session itself is threaded in via a
+contextvar (set_session/db_session, below) rather than an extra function parameter --
+app/main.py sets it once per request or per background job, before any pipeline module
+runs, and clears it after. This is the one deliberate deviation from "just swap the storage
+backend": a contextvar over a required parameter, specifically so the copied pipeline files
+didn't need touching at all."""
+
+from __future__ import annotations
+
+from contextvars import ContextVar
+from dataclasses import dataclass, field, fields
+
+from sqlalchemy.orm import Session
+
+from app.crypto import decrypt
+from app.models import Profile as ProfileRow
+from app.models import Secret as SecretRow
+
+_session_var: ContextVar[Session | None] = ContextVar("_session_var", default=None)
+
+
+def set_session(db: Session | None) -> None:
+    _session_var.set(db)
+
+
+def _require_session() -> Session:
+    db = _session_var.get()
+    if db is None:
+        raise RuntimeError(
+            "No DB session set -- call pipeline.config.set_session(db) before running "
+            "any pipeline module that loads a profile/secrets."
+        )
+    return db
+
+SECRET_KEYS = [
+    "GMAIL_OAUTH_CLIENT_ID",
+    "GMAIL_OAUTH_CLIENT_SECRET",
+    "GMAIL_OAUTH_REFRESH_TOKEN",
+    "GEMINI_API_KEY",
+    "ADZUNA_APP_ID",
+    "ADZUNA_APP_KEY",
+]
+
+
+@dataclass
+class Lane:
+    name: str
+    resume: str
+    keywords: list[str]
+    sources: list[str]
+    seniority_max: str | None = None
+    industries: list[str] = field(default_factory=list)
+    synonym_groups: list[list[str]] = field(default_factory=list)
+    relabel_titles_to_posting: bool = False
+    required_keywords: list[str] | None = None
+    max_years_experience: int | None = None
+    radius_km: float | None = None
+    remote_types: list[str] = field(default_factory=list)
+    employment_types: list[str] = field(default_factory=list)
+    salary_min: float | None = None
+    salary_max: float | None = None
+
+
+@dataclass
+class ColdEmailConfig:
+    daily_cap_week1: int
+    daily_cap_week3plus: int
+    ramp_start_date: str
+    search_keywords: list[str] = field(default_factory=list)
+
+
+@dataclass
+class Applicant:
+    first_name: str
+    last_name: str
+    country: str
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+@dataclass
+class Profile:
+    user: str
+    sheet_id: str
+    gmail_address: str
+    report_email: str
+    lanes: list[Lane]
+    cold_email: ColdEmailConfig
+    applicant: Applicant
+    greenhouse_boards: list[str] = field(default_factory=list)
+    lever_companies: list[str] = field(default_factory=list)
+    ashby_boards: list[str] = field(default_factory=list)
+    adzuna_country: str = "us"
+    target_countries: list[str] = field(default_factory=lambda: ["ca"])
+    apply_daily_cap: int = 15
+    github_repo: str = ""
+
+    def lane(self, name: str) -> Lane:
+        for lane in self.lanes:
+            if lane.name == name:
+                return lane
+        raise KeyError(f"No lane named {name!r} in profile {self.user!r}")
+
+
+def load_profile(user: str) -> Profile:
+    """user is the app's internal user id (users.id), not a filesystem slug. Requires
+    set_session(db) to have been called first (see module docstring)."""
+    db = _require_session()
+    user_id = user
+    row = db.query(ProfileRow).filter(ProfileRow.user_id == user_id).one_or_none()
+    if row is None:
+        raise LookupError(f"No profile row for user_id {user_id!r}")
+
+    applicant_fields = {f.name for f in fields(Applicant)}
+    applicant = Applicant(**{k: v for k, v in (row.applicant_json or {}).items() if k in applicant_fields})
+
+    return Profile(
+        user=user_id,
+        sheet_id=row.sheet_id,
+        gmail_address=row.gmail_address,
+        report_email=row.report_email,
+        lanes=[Lane(**lane_raw) for lane_raw in (row.lanes_json or [])],
+        cold_email=ColdEmailConfig(**(row.cold_email_json or {})),
+        applicant=applicant,
+        greenhouse_boards=list(row.greenhouse_boards_json or []),
+        lever_companies=list(row.lever_companies_json or []),
+        ashby_boards=list(row.ashby_boards_json or []),
+        adzuna_country=row.adzuna_country or "us",
+        target_countries=list(row.target_countries_json or ["ca"]),
+        apply_daily_cap=row.apply_daily_cap,
+        github_repo=row.github_repo or "",
+    )
+
+
+def load_secrets(user: str) -> dict[str, str]:
+    """Decrypts every stored Secret row for this user. Unlike the old file-based version,
+    there's no os.environ fallback here -- each user's own Gemini/Adzuna keys are theirs,
+    not a shared CI secret, so there's nothing meaningful to fall back to. Requires
+    set_session(db) to have been called first (see module docstring)."""
+    db = _require_session()
+    rows = db.query(SecretRow).filter(SecretRow.user_id == user).all()
+    return {row.key_name: decrypt(row.value_encrypted) for row in rows if row.key_name in SECRET_KEYS}
