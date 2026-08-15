@@ -15,13 +15,16 @@ import os
 import secrets as _secrets
 import uuid
 
+from pathlib import Path
+
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from google.auth.exceptions import RefreshError
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.db import SessionLocal, get_db
@@ -221,3 +224,32 @@ def _run_pipeline_in_background(user_id: str) -> None:
 def run_pipeline_for_user(user_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(_run_pipeline_in_background, user_id)
     return {"status": "started", "user_id": user_id}
+
+
+# ---------------------------------------------------------------------------
+# Serve the built frontend (frontend/dist) from this same process -- single Render
+# deploy instead of a separate Vercel deploy, one origin, no CORS between them. Must
+# stay the LAST thing registered: every /api/* route above is matched first since
+# Starlette tries routes in registration order, so this never shadows the API.
+# ---------------------------------------------------------------------------
+
+_FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+
+if _FRONTEND_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST / "assets"), name="frontend-assets")
+
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        return FileResponse(_FRONTEND_DIST / "favicon.ico")
+
+    @app.get("/logo.png", include_in_schema=False)
+    def logo():
+        return FileResponse(_FRONTEND_DIST / "logo.png")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def spa_fallback(full_path: str):
+        """Anything not matched above is a client-side route (React Router) -- always
+        serve index.html and let the SPA's own router resolve it, same as any other
+        single-page-app static host (Vercel/Netlify do this automatically; here it's
+        explicit since FastAPI doesn't have a built-in SPA fallback)."""
+        return FileResponse(_FRONTEND_DIST / "index.html")

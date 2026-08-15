@@ -65,8 +65,9 @@ import requests
 from pipeline.config import load_secrets
 from pipeline.filter import _is_recent, _matches_target_countries
 from pipeline.google_auth import get_gmail_service, send_email
+from pipeline.postings_store import get_cold_email_dedupe_keys, get_cold_emails, record_cold_email, update_cold_email
 from pipeline.search import REQUEST_TIMEOUT_SECONDS, _strip_html, search_adzuna, search_hiring_cafe
-from pipeline.sheet_log import append_row, get_existing_dedupe_keys, get_rows, record_cold_email_dedupe_backup, update_row
+from pipeline.sheet_log import record_cold_email_dedupe_backup
 from pipeline.text_match import word_boundary_match
 from pipeline.writing_style import DEFAULT_MODEL_FALLBACKS, STYLE_RULES, generate_with_gemini
 
@@ -277,7 +278,7 @@ def _bounce_rate(sent_rows: list[dict]) -> float:
 def compute_daily_cap(user: str, cold_email_config, today: date | None = None) -> int:
     today = today or date.today()
     week = _current_week_number(cold_email_config.ramp_start_date, today)
-    sent_rows = get_rows(user, "cold_emails")
+    sent_rows = get_cold_emails(user)
     bounce_rate = _bounce_rate(sent_rows)
 
     if week <= 2 or bounce_rate > BOUNCE_RATE_THRESHOLD:
@@ -287,7 +288,7 @@ def compute_daily_cap(user: str, cold_email_config, today: date | None = None) -
 
 def count_sent_today(user: str, today: date | None = None) -> int:
     today = today or date.today()
-    rows = get_rows(user, "cold_emails")
+    rows = get_cold_emails(user)
     return sum(1 for r in rows if r.get("date") == today.isoformat())
 
 
@@ -322,12 +323,12 @@ def refresh_bounce_and_reply_status(user: str) -> None:
     """Re-checks every sent cold email that hasn't been marked bounced/replied
     yet and updates the sheet. Call this before compute_daily_cap so the
     ramp decision reflects current data."""
-    for row in get_rows(user, "cold_emails"):
+    for row in get_cold_emails(user):
         thread_id = row.get("thread_id")
         if not thread_id or row.get("bounced") in ("Y", "N"):
             continue
         bounced, replied = check_bounce_or_reply(user, thread_id)
-        update_row(user, "cold_emails", "posting_key", row["posting_key"], {
+        update_cold_email(user, row["posting_key"], {
             "bounced": "Y" if bounced else "N",
             "replied": "Y" if replied else "N",
         })
@@ -425,7 +426,7 @@ def _send_cold_emails(user: str, profile, candidates: list[tuple]) -> dict:
     refresh_bounce_and_reply_status(user)
 
     daily_cap = compute_daily_cap(user, profile.cold_email)
-    existing_keys = get_existing_dedupe_keys(user, tab="cold_emails")
+    existing_keys = get_cold_email_dedupe_keys(user)
     already_sent_today = count_sent_today(user)
     company_site_lookups_used = 0  # per run — see COMPANY_SITE_LOOKUP_MAX_ATTEMPTS_PER_RUN
 
@@ -459,7 +460,7 @@ def _send_cold_emails(user: str, profile, candidates: list[tuple]) -> dict:
             print(f"[cold_email] {posting.dedupe_key()}: generation/send failed ({exc}), skipping")
             continue
 
-        append_row(user, "cold_emails", {
+        record_cold_email(user, {
             "posting_key": posting.dedupe_key(),
             "date": date.today().isoformat(),
             "lane": lane_name,

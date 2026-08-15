@@ -26,8 +26,8 @@ from pipeline.config import load_profile
 from pipeline.cover_letter import get_cover_letter
 from pipeline.drive_storage import upload_resume
 from pipeline.filter import extract_required_years
+from pipeline.postings_store import create_posting, get_posting, transition_posting, update_posting
 from pipeline.search import Posting
-from pipeline.sheet_log import append_row, delete_row, get_rows, update_row
 from pipeline.tailor_resume import render_resume_pdf, reword_bullets_with_llm, tailor_resume
 
 
@@ -41,7 +41,7 @@ def queue_for_swipe(user: str, lane, matches: list[tuple]) -> int:
     queued = 0
     for posting, matched_terms in matches:
         required_years = extract_required_years(f"{posting.title} {posting.description_text}")
-        append_row(user, "swipe_queue", {
+        create_posting(user, "queued", {
             "posting_key": posting.dedupe_key(),
             "date": date.today().isoformat(),
             "lane": lane.name,
@@ -56,9 +56,9 @@ def queue_for_swipe(user: str, lane, matches: list[tuple]) -> int:
             "matched_terms": ",".join(matched_terms),
             "remote_type": posting.remote_type,
             "employment_type": posting.employment_type,
-            "salary_min": posting.salary_min if posting.salary_min is not None else "",
-            "salary_max": posting.salary_max if posting.salary_max is not None else "",
-            "required_years": required_years if required_years is not None else "",
+            "salary_min": posting.salary_min,
+            "salary_max": posting.salary_max,
+            "required_years": required_years,
         })
         queued += 1
     return queued
@@ -100,9 +100,8 @@ def queue_like(user: str, posting_key: str) -> dict:
     placeholder written here) since generate_liked_materials() needs its
     description_text/matched_terms, which aren't columns on pending_approval
     and would otherwise be lost once the swipe_queue row is deleted."""
-    rows = get_rows(user, "swipe_queue")
-    match = next((r for r in rows if r.get("posting_key") == posting_key), None)
-    if match is None:
+    match = get_posting(user, posting_key)
+    if match is None or match.get("status") != "queued":
         raise SystemExit(f"No swipe_queue row found for posting_key={posting_key!r}")
 
     profile = load_profile(user)
@@ -110,29 +109,13 @@ def queue_like(user: str, posting_key: str) -> dict:
     if lane is None:
         raise SystemExit(f"No lane named {match.get('lane')!r} in {user}'s profile — can't tailor a resume for it.")
 
-    placeholder = {
-        "posting_key": match["posting_key"],
+    transition_posting(user, posting_key, "pending", {
         "date": date.today().isoformat(),
-        "lane": lane.name,
-        "company": match.get("company", ""),
-        "role": match.get("role", ""),
-        "source": match.get("source", ""),
-        "location": match.get("location", ""),
-        "posted_date": match.get("posted_date", ""),
         "reason_held": "generating",
         "resume_version": lane.resume,
-        "application_url": match.get("application_url", ""),
         "resume_link": "",
         "cover_letter": "",
-        "required_years": match.get("required_years", ""),
-    }
-    append_row(user, "pending_approval", placeholder)
-
-    if not delete_row(user, "swipe_queue", "posting_key", posting_key):
-        print(
-            f"[swipe_actions] Warning: appended to pending_approval but couldn't find "
-            f"the swipe_queue row for {posting_key} to remove — check the sheet."
-        )
+    })
 
     print(f"[swipe_actions] {posting_key} liked -> pending_approval (generating in background).")
     return match
@@ -153,12 +136,11 @@ def retry_generation(user: str, posting_key: str) -> dict:
     forever -- just not quite as sharply targeted as the original attempt
     would have been. Sets reason_held back to "generating" immediately so
     the dashboard shows the same in-progress state as a fresh like."""
-    rows = get_rows(user, "pending_approval")
-    row = next((r for r in rows if r.get("posting_key") == posting_key), None)
-    if row is None:
+    row = get_posting(user, posting_key)
+    if row is None or row.get("status") != "pending":
         raise SystemExit(f"No pending_approval row found for posting_key={posting_key!r}")
 
-    update_row(user, "pending_approval", "posting_key", posting_key, {"reason_held": "generating"})
+    update_posting(user, posting_key, {"reason_held": "generating"})
     return row
 
 
@@ -197,7 +179,7 @@ def generate_liked_materials(user: str, match: dict) -> None:
             print(f"[swipe_actions] upload_resume failed for {posting_key}: {exc}")
             resume_link = ""
 
-        update_row(user, "pending_approval", "posting_key", posting_key, {
+        update_posting(user, posting_key, {
             "content_flags": "; ".join(content_flags),
             "reason_held": "awaiting_manual_apply",
             "resume_link": resume_link,
@@ -206,7 +188,7 @@ def generate_liked_materials(user: str, match: dict) -> None:
         print(f"[swipe_actions] {posting_key} materials generated -> pending_approval.")
     except Exception as exc:  # noqa: BLE001 — background thread has no caller to raise to
         print(f"[swipe_actions] generation failed for {posting_key}: {exc}")
-        update_row(user, "pending_approval", "posting_key", posting_key, {
+        update_posting(user, posting_key, {
             "reason_held": f"generation_failed: {exc}",
         })
 
@@ -217,27 +199,13 @@ def reject_posting(user: str, posting_key: str) -> None:
     run_pipeline.py's dedupe reads dismissed_jobs, so a rejected posting
     never resurfaces in a later run's swipe queue, same permanence as
     dismissing a pending_approval row."""
-    rows = get_rows(user, "swipe_queue")
-    match = next((r for r in rows if r.get("posting_key") == posting_key), None)
-    if match is None:
+    match = get_posting(user, posting_key)
+    if match is None or match.get("status") != "queued":
         raise SystemExit(f"No swipe_queue row found for posting_key={posting_key!r}")
 
-    append_row(user, "dismissed_jobs", {
-        "posting_key": match["posting_key"],
-        "date": match.get("date", ""),
-        "lane": match.get("lane", ""),
-        "company": match.get("company", ""),
-        "role": match.get("role", ""),
-        "source": match.get("source", ""),
-        "location": match.get("location", ""),
+    transition_posting(user, posting_key, "dismissed", {
         "reason_held": "swiped_left",
         "dismissed_at": datetime.now().isoformat(timespec="seconds"),
     })
-
-    if not delete_row(user, "swipe_queue", "posting_key", posting_key):
-        print(
-            f"[swipe_actions] Warning: appended to dismissed_jobs but couldn't find "
-            f"the swipe_queue row for {posting_key} to remove — check the sheet."
-        )
 
     print(f"[swipe_actions] {posting_key} rejected -> dismissed_jobs.")

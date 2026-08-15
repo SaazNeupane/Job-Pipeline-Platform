@@ -35,7 +35,7 @@ from datetime import date
 
 from pipeline.config import load_profile
 from pipeline.google_auth import send_email
-from pipeline.sheet_log import append_row, get_rows
+from pipeline.postings_store import get_cold_emails, get_postings, record_daily_summary
 
 
 def build_daily_summary(
@@ -51,10 +51,10 @@ def build_daily_summary(
     errors = errors or []
     cold_email_stats = cold_email_stats or {}
 
-    applied_today = [r for r in get_rows(user, "applied_jobs") if r.get("date") == today_str]
-    queued_today = [r for r in get_rows(user, "swipe_queue") if r.get("date") == today_str]
-    emails_today = [r for r in get_rows(user, "cold_emails") if r.get("date") == today_str]
-    awaiting_apply = [r for r in get_rows(user, "pending_approval") if r.get("reason_held") == "awaiting_manual_apply"]
+    applied_today = [r for r in get_postings(user, status="applied") if r.get("date") == today_str]
+    queued_today = [r for r in get_postings(user, status="queued") if r.get("date") == today_str]
+    emails_today = [r for r in get_cold_emails(user) if r.get("date") == today_str]
+    awaiting_apply = [r for r in get_postings(user, status="pending") if r.get("reason_held") == "awaiting_manual_apply"]
 
     return {
         "date": today_str,
@@ -165,18 +165,18 @@ def _format_email_html(summary: dict) -> str:
 def send_daily_report(user: str, summary: dict) -> None:
     profile = load_profile(user)
 
-    append_row(user, "daily_summary", {
+    record_daily_summary(user, {
         "date": summary["date"],
-        "queued_count": str(summary["queued_count"]),
-        "awaiting_apply_count": str(summary["awaiting_apply_count"]),
-        "applied_count": str(summary["applied_count"]),
-        "emails_sent": str(summary["emails_sent"]),
+        "queued_count": summary["queued_count"],
+        "awaiting_apply_count": summary["awaiting_apply_count"],
+        "applied_count": summary["applied_count"],
+        "emails_sent": summary["emails_sent"],
         "errors": str(len(summary["errors"])),
         "notes": "; ".join(summary["errors"]) if summary["errors"] else "",
-        "cold_email_scanned": str(summary["cold_email_scanned"]),
-        "cold_email_eligible": str(summary["cold_email_eligible"]),
-        "cold_email_matched": str(summary["cold_email_matched"]),
-        "cold_email_contacts_found": str(summary["cold_email_contacts_found"]),
+        "cold_email_scanned": summary["cold_email_scanned"],
+        "cold_email_eligible": summary["cold_email_eligible"],
+        "cold_email_matched": summary["cold_email_matched"],
+        "cold_email_contacts_found": summary["cold_email_contacts_found"],
     })
 
     subject = (

@@ -9,7 +9,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -97,6 +98,120 @@ class Secret(Base):
     value_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="secrets")
+
+
+class Posting(Base):
+    """Source of truth for a user's job-search results, replacing the old
+    swipe_queue/pending_approval/applied_jobs/dismissed_jobs Google Sheet tabs. One row per
+    (user, posting_key), status transitions in place (queued -> pending -> applied, or
+    queued/pending -> dismissed) instead of the old copy-to-new-tab + delete-from-old-tab
+    dance, which was two non-atomic Sheets API calls. status_history keeps a lightweight
+    audit trail of past transitions since collapsing to one row loses the old per-tab
+    history. Mirrored (best-effort, non-blocking) to the user's Google Sheet by
+    pipeline/postings_store.py -- this table is authoritative, the Sheet is a read-only copy."""
+
+    __tablename__ = "postings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "posting_key", name="uq_postings_user_posting_key"),
+        Index("ix_postings_user_status", "user_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    posting_key: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)  # queued | pending | applied | dismissed
+
+    date: Mapped[str] = mapped_column(String, default="")
+    lane: Mapped[str] = mapped_column(String, default="")
+    company: Mapped[str] = mapped_column(String, default="")
+    role: Mapped[str] = mapped_column(String, default="")
+    source: Mapped[str] = mapped_column(String, default="")
+    location: Mapped[str] = mapped_column(String, default="")
+
+    # swipe_queue-origin fields
+    job_id: Mapped[str] = mapped_column(String, default="")
+    application_url: Mapped[str] = mapped_column(String, default="")
+    description_text: Mapped[str] = mapped_column(Text, default="")
+    matched_terms: Mapped[str] = mapped_column(String, default="")
+    posted_date: Mapped[str] = mapped_column(String, default="")
+    remote_type: Mapped[str] = mapped_column(String, default="")
+    employment_type: Mapped[str] = mapped_column(String, default="")
+    salary_min: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    salary_max: Mapped[float | None] = mapped_column(Numeric, nullable=True)
+    required_years: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # pending-stage fields
+    reason_held: Mapped[str] = mapped_column(String, default="")
+    resume_version: Mapped[str] = mapped_column(String, default="")
+    resume_link: Mapped[str] = mapped_column(String, default="")
+    cover_letter: Mapped[str] = mapped_column(Text, default="")
+    content_flags: Mapped[str] = mapped_column(String, default="")
+
+    # applied-stage fields
+    application_status: Mapped[str] = mapped_column(String, default="")
+    contact_emailed: Mapped[str] = mapped_column(String, default="")
+    email_sent_at: Mapped[str] = mapped_column(String, default="")
+
+    dismissed_at: Mapped[str] = mapped_column(String, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+    status_history: Mapped[list] = mapped_column(JSON, default=list)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ColdEmail(Base):
+    """Per-user cold-email send log, replacing the old cold_emails Google Sheet tab. A
+    posting can be both a normal lane match (Posting row) and independently cold-emailed --
+    two separate tracks against the same posting_key, not one lifecycle, hence its own table
+    rather than folding into Posting."""
+
+    __tablename__ = "cold_emails"
+    __table_args__ = (
+        Index("ix_cold_emails_user_posting_key", "user_id", "posting_key"),
+        Index("ix_cold_emails_user_date", "user_id", "date"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    posting_key: Mapped[str] = mapped_column(String, default="")
+    date: Mapped[str] = mapped_column(String, default="")
+    lane: Mapped[str] = mapped_column(String, default="")
+    company: Mapped[str] = mapped_column(String, default="")
+    location: Mapped[str] = mapped_column(String, default="")
+    contact_name: Mapped[str] = mapped_column(String, default="")
+    contact_email: Mapped[str] = mapped_column(String, default="")
+    sent_at: Mapped[str] = mapped_column(String, default="")
+    thread_id: Mapped[str] = mapped_column(String, default="")
+    # "Y" / "N" / "" (unknown), not a real boolean -- matches cold_email.py's own sentinel
+    # values (e.g. `row.get("bounced") in ("Y", "N")` to mean "checked at all"), carried
+    # over unchanged from the Sheets-tab era so that call site never needed to change.
+    bounced: Mapped[str] = mapped_column(String, default="")
+    replied: Mapped[str] = mapped_column(String, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
+class DailySummary(Base):
+    """One row per user per day, replacing the old daily_summary Google Sheet tab."""
+
+    __tablename__ = "daily_summaries"
+    __table_args__ = (Index("ix_daily_summaries_user_date", "user_id", "date"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    date: Mapped[str] = mapped_column(String, default="")
+    applied_count: Mapped[int] = mapped_column(Integer, default=0)
+    pending_approval_count: Mapped[int] = mapped_column(Integer, default=0)
+    emails_sent: Mapped[int] = mapped_column(Integer, default=0)
+    queued_count: Mapped[int] = mapped_column(Integer, default=0)
+    awaiting_apply_count: Mapped[int] = mapped_column(Integer, default=0)
+    cold_email_scanned: Mapped[int] = mapped_column(Integer, default=0)
+    cold_email_eligible: Mapped[int] = mapped_column(Integer, default=0)
+    cold_email_matched: Mapped[int] = mapped_column(Integer, default=0)
+    cold_email_contacts_found: Mapped[int] = mapped_column(Integer, default=0)
+    errors: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
 
 
 class WizardDraft(Base):

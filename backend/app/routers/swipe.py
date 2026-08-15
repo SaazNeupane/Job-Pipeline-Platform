@@ -5,12 +5,13 @@ from __future__ import annotations
 import threading
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from app.auth import get_current_user
 from app.models import User
 from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
 from pipeline.config import load_profile
-from pipeline.sheet_log import get_rows
+from pipeline.postings_store import get_postings
 from pipeline.swipe_actions import generate_liked_materials, queue_like, reject_posting
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
@@ -21,9 +22,12 @@ def queue(user: User = Depends(get_current_user)):
     try:
         profile = load_profile(user.id)
     except LookupError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No profile found -- finish the setup wizard first.")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "No profile found -- finish the setup wizard first.", "code": "profile_missing"},
+        )
 
-    rows = get_rows(user.id, "swipe_queue")
+    rows = get_postings(user.id, status="queued")
     lane_names = [lane.name for lane in profile.lanes]
     return {
         "queue": newest_first(rows),

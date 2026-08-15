@@ -33,8 +33,8 @@ from pipeline.config import load_profile, load_secrets
 from pipeline.daily_report import build_daily_summary, send_daily_report
 from pipeline.drive_storage import cleanup_old_files
 from pipeline.filter import RECENCY_MAX_AGE_DAYS, filter_postings, posting_fingerprint
+from pipeline.postings_store import get_existing_dedupe_keys, get_existing_fingerprints
 from pipeline.search import search_adzuna, search_ashby, search_greenhouse, search_hiring_cafe, search_lever
-from pipeline.sheet_log import get_existing_dedupe_keys, get_existing_fingerprints
 from pipeline.swipe_actions import queue_for_swipe
 
 
@@ -133,19 +133,19 @@ def run(
     existing_keys: set[str] = set()
     existing_fingerprints: set[str] = set()
     if lanes:
-        applied_keys = _try("get_existing_dedupe_keys[applied_jobs]", get_existing_dedupe_keys, user) or set()
+        applied_keys = _try("get_existing_dedupe_keys[applied]", get_existing_dedupe_keys, user, "applied") or set()
         held_keys = (
-            _try("get_existing_dedupe_keys[pending_approval]", get_existing_dedupe_keys, user, "pending_approval")
+            _try("get_existing_dedupe_keys[pending]", get_existing_dedupe_keys, user, "pending")
             or set()
         )
         dismissed_keys = (
-            _try("get_existing_dedupe_keys[dismissed_jobs]", get_existing_dedupe_keys, user, "dismissed_jobs")
+            _try("get_existing_dedupe_keys[dismissed]", get_existing_dedupe_keys, user, "dismissed")
             or set()
         )
-        # swipe_queue too — a posting already sitting in the queue (pending
+        # queued too — a posting already sitting in the queue (pending
         # a swipe either way) shouldn't get a duplicate card appended next run.
         queued_keys = (
-            _try("get_existing_dedupe_keys[swipe_queue]", get_existing_dedupe_keys, user, "swipe_queue")
+            _try("get_existing_dedupe_keys[queued]", get_existing_dedupe_keys, user, "queued")
             or set()
         )
         existing_keys = applied_keys | held_keys | dismissed_keys | queued_keys
@@ -156,10 +156,10 @@ def run(
         # posting (CMHA Thames Valley, "IT Support Helpdesk") under a brand
         # new ad id after the user had already applied to the original
         # listing — same job, different id, so the posting_key check let it
-        # right back in looking new. Same four tabs as existing_keys, same
+        # right back in looking new. Same four statuses as existing_keys, same
         # reasoning.
-        for tab in ("applied_jobs", "pending_approval", "dismissed_jobs", "swipe_queue"):
-            existing_fingerprints |= _try(f"get_existing_fingerprints[{tab}]", get_existing_fingerprints, user, tab) or set()
+        for status in ("applied", "pending", "dismissed", "queued"):
+            existing_fingerprints |= _try(f"get_existing_fingerprints[{status}]", get_existing_fingerprints, user, status) or set()
 
     for lane in lanes:
         matches = _try(

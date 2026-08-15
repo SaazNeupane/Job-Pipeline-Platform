@@ -8,6 +8,7 @@ from __future__ import annotations
 import threading
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -16,8 +17,8 @@ from app.models import User
 from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
 from pipeline.config import load_profile
 from pipeline.dismiss_application import dismiss_application, dismiss_applications
+from pipeline.postings_store import get_cold_emails, get_daily_summaries, get_postings_multi
 from pipeline.promote_application import promote_application
-from pipeline.sheet_log import get_rows_multi
 from pipeline.swipe_actions import generate_liked_materials, retry_generation
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -28,16 +29,17 @@ def dashboard(user: User = Depends(get_current_user)):
     try:
         profile = load_profile(user.id)
     except LookupError:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No profile found -- finish the setup wizard first.")
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "No profile found -- finish the setup wizard first.", "code": "profile_missing"},
+        )
 
-    rows_by_tab = get_rows_multi(
-        user.id, ["pending_approval", "applied_jobs", "daily_summary", "cold_emails", "swipe_queue"],
-    )
-    pending = rows_by_tab["pending_approval"]
-    applied = rows_by_tab["applied_jobs"]
-    summary = rows_by_tab["daily_summary"]
-    cold_emails = rows_by_tab["cold_emails"]
-    swipe_queue_count = len(rows_by_tab["swipe_queue"])
+    postings_by_status = get_postings_multi(user.id, ["pending", "applied", "queued"])
+    pending = postings_by_status["pending"]
+    applied = postings_by_status["applied"]
+    summary = get_daily_summaries(user.id)
+    cold_emails = get_cold_emails(user.id)
+    swipe_queue_count = len(postings_by_status["queued"])
     lane_names = [lane.name for lane in profile.lanes]
 
     return {

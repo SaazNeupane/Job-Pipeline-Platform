@@ -17,36 +17,21 @@ from __future__ import annotations
 import sys
 from datetime import date
 
-from pipeline.sheet_log import append_row, delete_row, get_rows
+from pipeline.postings_store import get_posting, transition_posting
 
 
 def promote_application(user: str, posting_key: str) -> None:
     """Moves a pending_approval row to applied_jobs as submitted_manually.
     Split out from main() so the dashboard (webapp.py) can call it directly
     instead of shelling out to this script."""
-    rows = get_rows(user, "pending_approval")
-    match = next((r for r in rows if r.get("posting_key") == posting_key), None)
-    if match is None:
+    match = get_posting(user, posting_key)
+    if match is None or match.get("status") != "pending":
         raise SystemExit(f"No pending_approval row found for posting_key={posting_key!r}")
 
-    append_row(user, "applied_jobs", {
-        "posting_key": match["posting_key"],
+    transition_posting(user, posting_key, "applied", {
         "date": date.today().isoformat(),
-        "lane": match.get("lane", ""),
-        "company": match.get("company", ""),
-        "role": match.get("role", ""),
-        "source": match.get("source", ""),
-        "location": match.get("location", ""),
         "application_status": "submitted_manually",
-        "resume_version": match.get("resume_version", ""),
-        "content_flags": match.get("content_flags", ""),
     })
-
-    if not delete_row(user, "pending_approval", "posting_key", posting_key):
-        print(
-            f"[promote_application] Warning: appended to applied_jobs but couldn't "
-            f"find the pending_approval row for {posting_key} to remove — check the sheet."
-        )
 
     print(f"[promote_application] {posting_key} moved to applied_jobs (submitted_manually).")
 

@@ -1,4 +1,8 @@
-"""Read/write the Google Sheet log (spec Section 4, step 6)."""
+"""Google Sheet write/mirror primitives. Postgres (pipeline/postings_store.py) is now the
+source of truth for postings/cold_emails/daily_summary -- this module no longer owns reads;
+it's called only by postings_store.py's best-effort mirror writes (append_row/update_row/
+delete_row/delete_rows) and by scripts/backfill_postings_from_sheet.py (get_rows, kept around
+specifically for that one-time-per-new-user import script)."""
 
 from __future__ import annotations
 
@@ -8,7 +12,6 @@ from http.client import IncompleteRead
 from pathlib import Path
 
 from pipeline.config import load_profile
-from pipeline.filter import posting_fingerprint
 from pipeline.google_auth import get_sheets_service
 from pipeline.json_cache import read_json_file, write_json_file
 
@@ -66,67 +69,6 @@ def record_cold_email_dedupe_backup(posting_key: str, backup_path: Path = COLD_E
     keys = _load_dedupe_backup(backup_path)
     keys.add(posting_key)
     write_json_file(backup_path, sorted(keys))
-
-
-def get_existing_dedupe_keys(
-    user: str, tab: str = "applied_jobs", backup_path: Path = COLD_EMAIL_DEDUPE_BACKUP_PATH,
-) -> set[str]:
-    """One Sheets API read for the whole tab — call this once per pipeline
-    run and hold the result in memory, rather than querying per posting.
-
-    For tab="cold_emails", the result is unioned with the local dedupe
-    backup file (see COLD_EMAIL_DEDUPE_BACKUP_PATH) so a cleared/rolled-back
-    Sheet tab doesn't reopen the door to a duplicate real send."""
-    profile = load_profile(user)
-    service = get_sheets_service(user)
-
-    result = _execute_with_retry(service.spreadsheets().values().get(
-        spreadsheetId=profile.sheet_id, range=tab
-    ))
-    rows = result.get("values", [])
-
-    keys: set[str] = set()
-    if rows:
-        header = rows[0]
-        if "posting_key" not in header:
-            raise RuntimeError(f"'{tab}' tab has no posting_key column — re-run setup_sheet.py")
-        col_index = header.index("posting_key")
-        keys = {row[col_index] for row in rows[1:] if col_index < len(row) and row[col_index]}
-
-    if tab == "cold_emails":
-        keys |= _load_dedupe_backup(backup_path)
-
-    return keys
-
-
-def get_existing_fingerprints(user: str, tab: str) -> set[str]:
-    """Same one-read-per-tab pattern as get_existing_dedupe_keys, but keyed
-    on (source, company, role, location) instead of posting_key -- see
-    filter.posting_fingerprint's own docstring for why posting_key alone
-    isn't enough (Adzuna re-lists the same real job under a new ad id).
-    Returns an empty set for a tab missing any of the needed columns
-    (older sheet snapshots before this column set existed) rather than
-    raising -- same fail-open spirit as the rest of this file's dedupe
-    checks."""
-    profile = load_profile(user)
-    service = get_sheets_service(user)
-
-    result = _execute_with_retry(service.spreadsheets().values().get(spreadsheetId=profile.sheet_id, range=tab))
-    rows = result.get("values", [])
-    if not rows:
-        return set()
-
-    header = rows[0]
-    needed = ["source", "company", "role", "location"]
-    if not all(col in header for col in needed):
-        return set()
-    idx = {col: header.index(col) for col in needed}
-
-    fingerprints = set()
-    for row in rows[1:]:
-        values = {col: (row[i] if i < len(row) else "") for col, i in idx.items()}
-        fingerprints.add(posting_fingerprint(values["source"], values["company"], values["role"], values["location"]))
-    return fingerprints
 
 
 def append_row(user: str, tab: str, row: dict) -> None:
@@ -256,33 +198,6 @@ def get_rows(user: str, tab: str) -> list[dict[str, str]]:
         {col: (row[i] if i < len(row) else "") for i, col in enumerate(header)}
         for row in rows[1:]
     ]
-
-
-def get_rows_multi(user: str, tabs: list[str]) -> dict[str, list[dict[str, str]]]:
-    """Same shape as get_rows() but for several tabs in one Sheets API call
-    (batchGet) instead of one sequential get_rows() call per tab -- the
-    dashboard route used to make 5 separate get_rows() calls (pending_approval,
-    applied_jobs, daily_summary, cold_emails, swipe_queue), each its own
-    round trip, which was a real chunk of "the whole webapp feels laggy."""
-    profile = load_profile(user)
-    service = get_sheets_service(user)
-
-    result = _execute_with_retry(service.spreadsheets().values().batchGet(
-        spreadsheetId=profile.sheet_id, ranges=tabs,
-    ))
-
-    rows_by_tab: dict[str, list[dict[str, str]]] = {}
-    for tab, value_range in zip(tabs, result.get("valueRanges", [])):
-        rows = value_range.get("values", [])
-        if not rows:
-            rows_by_tab[tab] = []
-            continue
-        header = rows[0]
-        rows_by_tab[tab] = [
-            {col: (row[i] if i < len(row) else "") for i, col in enumerate(header)}
-            for row in rows[1:]
-        ]
-    return rows_by_tab
 
 
 def update_row(user: str, tab: str, match_column: str, match_value: str, updates: dict) -> bool:
