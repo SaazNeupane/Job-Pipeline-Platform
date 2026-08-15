@@ -59,10 +59,18 @@ directly.
 - [ ] Deploy: Render (backend) + Vercel (frontend) + Supabase (DB), wire real env vars
 - [ ] Submit for Google OAuth app verification (external, manual, required before open
       signup can request Gmail/Drive scopes from arbitrary accounts — see plan doc)
-- [ ] **Nothing has been run in this environment** — no `pip install`/`npm install`, no live
-      server, no DB. Verification so far is `python -m py_compile` on every new/changed
-      backend file (confirms syntax only, not imports/behavior). Before trusting this, install
-      real deps, run `scripts/init_db.py` against a real Postgres, and hit `/health` at minimum.
+- [x] Backend actually runs: real venv, `pip install -r requirements.txt`, `scripts/init_db.py`
+      against a local SQLite DB (no Postgres/Docker available in this environment — models
+      use plain `String(36)` ids, not a Postgres-only type, specifically so this works), and a
+      live `uvicorn` process exercised end to end (signup → login → JWT-authenticated
+      `/api/me` → wizard draft/lanes → dashboard 404-before-finalize → real Google OAuth
+      authorization URL). Three real bugs this caught that `py_compile` couldn't: missing
+      `python-multipart`, missing `email-validator`, and passlib being incompatible with
+      modern bcrypt (now calls `bcrypt` directly). Confirmed the fixed `requirements.txt`
+      alone (no manual post-install patches) produces a working install from a clean venv.
+      **Still not tested**: real Postgres (only SQLite so far), the wizard `finalize` →
+      `create_sheet` path (needs real Google OAuth, can't complete with a dummy client id),
+      `/api/internal/run` actually running a pipeline (needs a real profile + real secrets).
 
 ## Local dev
 
