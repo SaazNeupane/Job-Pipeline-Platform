@@ -7,10 +7,10 @@ from __future__ import annotations
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -20,16 +20,22 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRES_MINUTES = 60 * 24 * 7  # one week
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer()
+
+# bcrypt itself caps input at 72 bytes -- truncate deliberately up front rather than let a
+# long password silently only have its first 72 bytes matter (bcrypt's own behavior either
+# way, this just makes it explicit rather than relying on library internals).
+_MAX_PASSWORD_BYTES = 72
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    truncated = password.encode("utf-8")[:_MAX_PASSWORD_BYTES]
+    return bcrypt.hashpw(truncated, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return pwd_context.verify(password, password_hash)
+    truncated = password.encode("utf-8")[:_MAX_PASSWORD_BYTES]
+    return bcrypt.checkpw(truncated, password_hash.encode("utf-8"))
 
 
 def create_access_token(user_id: str) -> str:

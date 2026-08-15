@@ -5,10 +5,11 @@ psycopg[binary]
 alembic
 python-dotenv
 cryptography
-pydantic
+pydantic[email]
 pydantic-settings
-passlib[bcrypt]
+bcrypt
 pyjwt
+python-multipart
 requests
 reportlab
 pypdf
