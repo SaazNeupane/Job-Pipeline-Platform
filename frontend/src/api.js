@@ -29,6 +29,15 @@ export function getToken() {
   return token;
 }
 
+// Fallback wording for failures that never reached a route handler (network drop, backend
+// down, an unhandled 500) -- these never carry a hand-written detail string, so body.detail
+// is empty and we'd otherwise show "Request failed (500)" verbatim.
+function fallbackMessage(status) {
+  if (status === 0) return "Can't reach the server. Check your connection and try again.";
+  if (status >= 500) return "Something went wrong on our end. Try again in a moment.";
+  return "Something went wrong. Try again.";
+}
+
 async function handle(resp) {
   let body = null;
   try {
@@ -37,7 +46,7 @@ async function handle(resp) {
     // no body
   }
   if (!resp.ok) {
-    const message = (body && (body.error || body.detail)) || `Request failed (${resp.status})`;
+    const message = (body && (body.error || body.detail)) || fallbackMessage(resp.status);
     showToast(message);
     const err = new Error(message);
     err.code = body && body.code;

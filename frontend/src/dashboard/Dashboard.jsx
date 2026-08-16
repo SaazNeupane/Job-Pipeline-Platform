@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import Collapsible from "../components/Collapsible.jsx";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
 import { useApiData } from "../hooks/useApiData.js";
@@ -142,6 +143,7 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [busyRows, setBusyRows] = useState({}); // posting_key -> "promote" | "dismiss"
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null); // { type: "single", key } | { type: "bulk" }
 
   // A right-swipe writes its pending_approval row immediately
   // (reason_held="generating") and fills in the resume/cover letter a few
@@ -208,7 +210,7 @@ export default function Dashboard() {
       setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
     }
   }
-  async function dismiss(key) {
+  async function doDismiss(key) {
     setBusyRows((prev) => ({ ...prev, [key]: "dismiss" }));
     try {
       await api.dismiss(key);
@@ -219,7 +221,7 @@ export default function Dashboard() {
       setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
     }
   }
-  async function dismissSelected() {
+  async function doDismissSelected() {
     if (!selected.size || bulkBusy) return;
     setBulkBusy(true);
     try {
@@ -231,6 +233,13 @@ export default function Dashboard() {
     } finally {
       setBulkBusy(false);
     }
+  }
+
+  function confirmDismiss() {
+    if (!confirmTarget) return;
+    if (confirmTarget.type === "single") doDismiss(confirmTarget.key);
+    else doDismissSelected();
+    setConfirmTarget(null);
   }
 
   if (errorCode === "google_reauth_required") return <GoogleReconnectBanner onReconnected={load} />;
@@ -252,6 +261,23 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {(data.keys_missing?.adzuna || data.keys_missing?.gemini) && (
+        <div className="banner">
+          <p>
+            {data.keys_missing.adzuna && data.keys_missing.gemini
+              ? "Add your Adzuna and Gemini keys to start finding and tailoring jobs."
+              : data.keys_missing.adzuna
+              ? "Add your Adzuna key to start finding jobs."
+              : "Add your Gemini key so cover letters and resume tailoring can run."}{" "}
+            <Link to="/setup/keys">Add keys</Link>
+          </p>
+        </div>
+      )}
+
+      {data.apply_daily_cap != null && (
+        <p className="lede" style={{ marginTop: "-0.5rem" }}>We submit up to {data.apply_daily_cap} applications a day for you.</p>
+      )}
 
       <div className="stat-strip">
         <div className="stat-item">
@@ -295,7 +321,7 @@ export default function Dashboard() {
           <span>{selected.size} selected</span>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button type="button" className="secondary" onClick={() => setSelected(new Set())} disabled={bulkBusy}>Clear</button>
-            <button type="button" className="danger" onClick={dismissSelected} disabled={bulkBusy}>{bulkBusy ? "Dismissing…" : "Dismiss selected"}</button>
+            <button type="button" className="danger" onClick={() => setConfirmTarget({ type: "bulk" })} disabled={bulkBusy}>{bulkBusy ? "Dismissing…" : "Dismiss selected"}</button>
           </div>
         </div>
       )}
@@ -310,7 +336,7 @@ export default function Dashboard() {
                   selected={selected.has(row.posting_key)}
                   onToggleSelect={(checked) => toggleSelect(row.posting_key, checked)}
                   onPromote={() => promote(row.posting_key)}
-                  onDismiss={() => dismiss(row.posting_key)}
+                  onDismiss={() => setConfirmTarget({ type: "single", key: row.posting_key })}
                   onRetry={() => retry(row.posting_key)}
                   open={openDetail === row.posting_key}
                   onToggleOpen={() => setOpenDetail(openDetail === row.posting_key ? null : row.posting_key)}
@@ -362,6 +388,15 @@ export default function Dashboard() {
           <div className="empty-state">No runs yet.</div>
         )}
       </Collapsible>
+
+      <ConfirmDialog
+        open={!!confirmTarget}
+        title={confirmTarget?.type === "bulk" ? `Dismiss ${selected.size} job${selected.size === 1 ? "" : "s"}?` : "Dismiss this job?"}
+        body="It won't show up here again. You can still find it in your Google Sheet if you change your mind."
+        confirmLabel="Dismiss"
+        onConfirm={confirmDismiss}
+        onCancel={() => setConfirmTarget(null)}
+      />
     </>
   );
 }

@@ -214,6 +214,22 @@ class DailySummary(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
 
 
+class Invite(Base):
+    """Single-use signup invite codes, replacing the old single shared INVITE_CODE env var --
+    that gave every invitee the same code with no way to revoke or track just one, which was
+    fine for a friends-and-family batch but not a real invite system. Minted via the
+    internal-only /api/internal/invites route (same shared-secret auth as the rest of
+    /api/internal/*), consumed atomically by signup()."""
+
+    __tablename__ = "invites"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    code: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    used_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
 class WizardDraft(Base):
     """In-progress setup wizard state, replaces the old per-user .wizard_draft.json file."""
 

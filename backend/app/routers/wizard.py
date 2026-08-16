@@ -8,6 +8,8 @@ before allowing finalize.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -20,6 +22,7 @@ from pipeline import wizard as wizard_logic
 from pipeline.geocode import geocode_address
 
 router = APIRouter(prefix="/api/wizard", tags=["wizard"])
+logger = logging.getLogger(__name__)
 
 _EMPTY_DRAFT = {"lanes": [], "lane_names": [], "lane_labels": {}}
 
@@ -75,8 +78,9 @@ def geocode(body: dict, user: User = Depends(get_current_user)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Address is required.")
     try:
         result = geocode_address(address)
-    except Exception as exc:  # noqa: BLE001 -- external service failure, surfaced not crashed
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Couldn't look up that address: {exc}")
+    except Exception:  # noqa: BLE001 -- external service failure, surfaced not crashed
+        logger.exception("geocode_address failed for address=%r", address)
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Couldn't reach the address lookup service. Try again in a moment.")
     if result is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Couldn't find that address -- check the spelling, or enter coordinates directly.")
     latitude, longitude = result
@@ -99,8 +103,9 @@ async def import_resume(
         resume = wizard_logic.structure_resume_with_llm(gemini_api_key.strip(), raw_text)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
-    except Exception as exc:  # noqa: BLE001 -- surfaced to the user, not a crash
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Couldn't import that resume: {exc}")
+    except Exception:  # noqa: BLE001 -- surfaced to the user, not a crash
+        logger.exception("resume PDF import failed")
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Couldn't import that resume. Try again, or fill it in by hand instead.")
     return resume
 
 
@@ -224,8 +229,9 @@ def finalize(user: User = Depends(get_current_user), db: Session = Depends(get_d
 
     try:
         sheet_id = profile_row.sheet_id or setup_sheet.create_sheet(user.id)
-    except Exception as exc:  # noqa: BLE001 -- shown to the user, not a crash
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Couldn't create your Google Sheet: {exc}")
+    except Exception:  # noqa: BLE001 -- shown to the user, not a crash
+        logger.exception("create_sheet failed for user_id=%r", user.id)
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Couldn't create your Google Sheet. Try reconnecting Google and try again.")
 
     profile_row.sheet_id = sheet_id
     profile_row.gmail_address = profile_dict["gmail_address"]

@@ -15,7 +15,7 @@ from app.auth import get_current_user
 from app.db import get_db
 from app.models import User
 from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
-from pipeline.config import load_profile
+from pipeline.config import load_profile, load_secrets
 from pipeline.dismiss_application import dismiss_application, dismiss_applications
 from pipeline.postings_store import get_cold_emails, get_daily_summaries, get_postings_multi
 from pipeline.promote_application import promote_application
@@ -41,6 +41,7 @@ def dashboard(user: User = Depends(get_current_user)):
     cold_emails = get_cold_emails(user.id)
     swipe_queue_count = len(postings_by_status["queued"])
     lane_names = [lane.name for lane in profile.lanes]
+    secrets = load_secrets(user.id)
 
     return {
         "user": user.id,
@@ -54,6 +55,11 @@ def dashboard(user: User = Depends(get_current_user)):
         "swipe_queue_count": swipe_queue_count,
         "lane_names": lane_names,
         "lane_labels": {name: lane_label(name) for name in lane_names},
+        "apply_daily_cap": profile.apply_daily_cap,
+        "keys_missing": {
+            "adzuna": not (secrets.get("ADZUNA_APP_ID") and secrets.get("ADZUNA_APP_KEY")),
+            "gemini": not secrets.get("GEMINI_API_KEY"),
+        },
     }
 
 

@@ -15,6 +15,7 @@ import os
 import secrets as _secrets
 import uuid
 
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
@@ -28,7 +29,7 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.db import SessionLocal, get_db
-from app.models import User
+from app.models import Invite, User
 from app.routers import dashboard as dashboard_router
 from app.routers import swipe as swipe_router
 from app.routers import wizard as wizard_router
@@ -60,7 +61,6 @@ app.add_middleware(
 )
 
 INTERNAL_SHARED_SECRET = os.environ["INTERNAL_SHARED_SECRET"]
-INVITE_CODE = os.environ["INVITE_CODE"]
 
 
 @app.middleware("http")
@@ -112,12 +112,16 @@ class TokenResponse(BaseModel):
 
 @app.post("/api/auth/signup", response_model=TokenResponse)
 def signup(body: SignupRequest, db: Session = Depends(get_db)):
-    if not _secrets.compare_digest(body.invite_code, INVITE_CODE):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid invite code")
+    invite = db.query(Invite).filter(Invite.code == body.invite_code).one_or_none()
+    if invite is None or invite.used_at is not None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid or already-used invite code")
     if db.query(User).filter(User.email == body.email).one_or_none() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
     user = User(id=str(uuid.uuid4()), email=body.email, password_hash=hash_password(body.password))
     db.add(user)
+    db.flush()  # user row must exist before invite's FK update below
+    invite.used_at = datetime.utcnow()
+    invite.used_by_user_id = user.id
     db.commit()
     return TokenResponse(access_token=create_access_token(user.id))
 
@@ -206,6 +210,18 @@ def _require_internal_secret(x_internal_secret: str = Header(default="")):
 def active_users(db: Session = Depends(get_db)):
     users = db.query(User).filter(User.active.is_(True)).all()
     return {"user_ids": [u.id for u in users]}
+
+
+@app.post("/api/internal/invites", dependencies=[Depends(_require_internal_secret)])
+def mint_invite(db: Session = Depends(get_db)):
+    """Generates one single-use signup code. Call with the same X-Internal-Secret header
+    used by the scheduler, e.g.
+    `curl -X POST -H "X-Internal-Secret: $INTERNAL_SHARED_SECRET" https://<host>/api/internal/invites`
+    -- replaces manually handing out the one shared INVITE_CODE."""
+    invite = Invite(code=_secrets.token_urlsafe(9))
+    db.add(invite)
+    db.commit()
+    return {"code": invite.code}
 
 
 def _run_pipeline_in_background(user_id: str) -> None:

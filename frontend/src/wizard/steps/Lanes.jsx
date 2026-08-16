@@ -164,15 +164,15 @@ export default function Lanes() {
           <p className="hint">Skip this unless you want to point the search at specific companies instead of the built-in default list.</p>
           <label>
             Greenhouse company boards to search (comma-separated)
-            <input value={greenhouseBoards} onChange={(e) => setGreenhouseBoards(e.target.value)} placeholder="Leave blank to use a pre-checked default list" />
+            <input value={greenhouseBoards} onChange={(e) => setGreenhouseBoards(e.target.value)} placeholder="Leave blank to use our default list: gitlab, doordash, robinhood, figma, faire, stripe, discord, airbnb" />
           </label>
           <label>
             Lever companies to search (comma-separated, e.g. "palantir" for jobs.lever.co/palantir)
-            <input value={leverCompanies} onChange={(e) => setLeverCompanies(e.target.value)} placeholder="Leave blank to use a pre-checked default list" />
+            <input value={leverCompanies} onChange={(e) => setLeverCompanies(e.target.value)} placeholder="Leave blank to use our default list: palantir, plaid" />
           </label>
           <label>
             Ashby boards to search (comma-separated, e.g. "linear" for jobs.ashbyhq.com/linear)
-            <input value={ashbyBoards} onChange={(e) => setAshbyBoards(e.target.value)} placeholder="Leave blank to use a pre-checked default list" />
+            <input value={ashbyBoards} onChange={(e) => setAshbyBoards(e.target.value)} placeholder="Leave blank to use our default list: ramp, linear, notion, openai, substack" />
           </label>
           <label>
             Adzuna country code (2 letters, e.g. "ca" for Canada, "us" for United States)

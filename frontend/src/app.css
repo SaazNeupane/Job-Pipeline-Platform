@@ -200,6 +200,10 @@ legend {
   margin-bottom: 1.25rem;
 }
 
+.summary-list { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1.2rem; }
+.summary-list dt { font-weight: 600; color: var(--ink-soft); white-space: nowrap; }
+.summary-list dd { margin: 0; }
+
 /* Toasts ----------------------------------------------------------------- */
 .toast-host {
   position: fixed; top: 1rem; right: 1rem; z-index: 1000;
@@ -639,6 +643,18 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
   background: var(--redline-soft); border: 1px solid var(--redline); border-radius: var(--radius-sm);
   padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.86rem; font-weight: 600; color: var(--redline-strong);
 }
+
+.confirm-dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: center; justify-content: center; padding: 1rem; z-index: 100;
+}
+.confirm-dialog {
+  background: var(--surface); border: 1px solid var(--wire-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow-strong); padding: 1.4rem 1.5rem; max-width: 380px; width: 100%;
+}
+.confirm-dialog h3 { margin: 0 0 0.5rem; }
+.confirm-dialog p { margin: 0 0 1.2rem; color: var(--ink-soft); }
+.confirm-dialog-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 
 .posting-list { display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem; }
 .posting-card {
