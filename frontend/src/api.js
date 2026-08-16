@@ -14,7 +14,12 @@
 
 import { showToast } from "./toast.js";
 
-export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+// Empty string, not a localhost fallback: in production this frontend is served by the
+// same FastAPI process it talks to (backend/app/main.py's StaticFiles mount), so a relative
+// path already resolves correctly. Local dev overrides via frontend/.env (gitignored, not
+// present in a fresh clone or a Render build), which is the only place localhost:8000
+// belongs.
+export const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 const TOKEN_STORAGE_KEY = "job_pipeline_token";
 let token = localStorage.getItem(TOKEN_STORAGE_KEY) || "";
