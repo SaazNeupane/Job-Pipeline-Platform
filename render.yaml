@@ -24,5 +24,13 @@ services:
         sync: false
       - key: INVITE_CODE
         sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: BREVO_FROM_EMAIL
+        sync: false
+      - key: BREVO_FROM_NAME
+        sync: false
+      - key: BACKEND_PUBLIC_URL
+        sync: false
       - key: PYTHON_VERSION
         value: "3.12.4"
