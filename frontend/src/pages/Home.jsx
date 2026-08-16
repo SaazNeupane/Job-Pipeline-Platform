@@ -53,7 +53,7 @@ const SETUP_STEPS = [
   {
     n: "05",
     title: "Connect Google",
-    body: "A real OAuth connection to your own Google account, so the pipeline can act as you: reading and writing one Google Sheet, sending mail from your Gmail, storing held resumes on your Drive. It never touches anyone else's account.",
+    body: "A real OAuth connection to your own Google account, so the pipeline can act as you: reading and writing one Google Sheet, sending mail from your Gmail and checking that same inbox for a bounce or a reply, storing held resumes on your Drive. It never touches anyone else's account.",
   },
   {
     n: "06",
@@ -129,13 +129,14 @@ export default function Home() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>What it actually does</h3>
           <p style={{ marginBottom: 0 }}>
-            Every day, this searches real job postings (Adzuna, Greenhouse, hiring.cafe) and filters
-            them down to real matches for the lanes you set up. Those land in a swipe queue: go through
-            them one at a time, right for "I'd apply to this," left for "no." Right-swipe a posting and
-            it tailors your resume and writes a cover letter for it, then hands you both from your
-            dashboard so you can go apply yourself. Nothing here uses anyone else's data or account but
-            your own: your own Google account, your own resume, your own applications going out under
-            your own name.
+            Every day, this searches real job postings (Adzuna, Greenhouse, Lever, Ashby, hiring.cafe)
+            and filters them down to real matches for the lanes you set up. Those land in a swipe
+            queue: go through them one at a time, right for "I'd apply to this," left for "no."
+            Right-swipe a posting and it tailors your resume and writes a cover letter for it, then
+            hands you both from your dashboard so you can go apply yourself. A separate cold email
+            pipeline runs alongside this one and does send on its own; see below for what that means.
+            Nothing here uses anyone else's data or account but your own: your own Google account, your
+            own resume, your own applications going out under your own name.
           </p>
         </div>
 
@@ -161,10 +162,20 @@ export default function Home() {
           good.
         </p>
 
+        <h3>Cold email, the one thing that sends on its own</h3>
+        <p>
+          Separately from the swipe queue, this also searches Adzuna and hiring.cafe for postings that
+          list a real, published contact email, never a guessed one like careers@company.com. When it
+          finds one, it writes a short email for it and sends that email from your Gmail without
+          waiting for you to review it first. It starts at a low daily cap, raises that cap after a
+          couple of weeks, and holds it back down if too many of those emails start bouncing. Every
+          email it sends, along with any reply or bounce, shows up on the cold email page.
+        </p>
+
         <div className="card">
           <h3 style={{ marginTop: 0 }}>A few important limits, on purpose</h3>
           <ul style={{ marginBottom: 0 }}>
-            <li>Nothing gets submitted for you. You decide what's worth applying to by swiping, and you're the one who hits submit on the actual form.</li>
+            <li>Nothing gets submitted for you on the job-application side. You decide what's worth applying to by swiping, and you're the one who hits submit on the actual form. Cold email, described above, is the one exception, and it only ever emails a real address it found published, never one it guessed.</li>
             <li>It only ever uses information you actually gave it. It won't invent a skill, a number, or a job you didn't have.</li>
             <li>It only surfaces real, live postings found through the search sources above, nothing scraped from a site that doesn't allow it.</li>
           </ul>

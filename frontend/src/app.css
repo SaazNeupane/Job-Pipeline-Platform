@@ -388,12 +388,12 @@ legend {
 .terminal-line {
   font-family: var(--font-mono); font-size: 0.85rem; color: #5c8a6a; margin: 0 0 1.1rem;
 }
-.terminal-prompt { color: #39ff14; margin-right: 0.5rem; }
+.terminal-prompt { color: var(--redline); margin-right: 0.5rem; }
 .terminal-h1 {
   font-size: 2.5rem; max-width: 18ch; line-height: 1.15;
   color: #f1f5f2;
 }
-.terminal-cursor { display: inline-block; color: #39ff14; animation: cursor-blink 1.1s step-end infinite; }
+.terminal-cursor { display: inline-block; color: var(--redline); animation: cursor-blink 1.1s step-end infinite; }
 @keyframes cursor-blink { 50% { opacity: 0; } }
 .terminal-lede { color: #a9bfae !important; font-size: 1.05rem; max-width: 52ch; }
 .terminal-body .hero-actions { margin-top: 1.8rem; }
