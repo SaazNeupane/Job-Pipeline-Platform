@@ -54,6 +54,7 @@ export default function Lanes() {
   const [ashbyBoards, setAshbyBoards] = useState((draft.ashby_boards || []).join(", "));
   const [adzunaCountry, setAdzunaCountry] = useState(draft.adzuna_country || "ca");
   const [targetCountries, setTargetCountries] = useState((draft.target_countries || []).join(", "));
+  const [runHourUtc, setRunHourUtc] = useState(draft.run_hour_utc ?? 14);
 
   const { data: meta, error, setError } = useApiData(() => api.lanePresets(), []);
 
@@ -100,6 +101,7 @@ export default function Lanes() {
         ashby_boards: csv(ashbyBoards),
         adzuna_country: adzunaCountry.trim().toLowerCase(),
         target_countries: csv(targetCountries).map((c) => c.toLowerCase()),
+        run_hour_utc: runHourUtc,
       });
       await refreshDraft();
       navigate("/setup/resume");
@@ -182,6 +184,15 @@ export default function Lanes() {
             Countries you'll accept postings from (comma-separated; codes like "ca"/"us"/"gb"/"au" are matched precisely, anything else is matched as a plain country name)
             <input value={targetCountries} onChange={(e) => setTargetCountries(e.target.value)} placeholder="e.g. ca, us" />
           </label>
+          <label>
+            What hour your daily run happens (UTC)
+            <select value={runHourUtc} onChange={(e) => setRunHourUtc(Number(e.target.value))}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>{String(h).padStart(2, "0")}:00 UTC</option>
+              ))}
+            </select>
+          </label>
+          <p className="hint">Every user's run fires within a few minutes of this hour, not at a specific minute.</p>
         </details>
 
         <div className="wizard-actions">

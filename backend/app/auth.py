@@ -46,6 +46,32 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
+_VERIFY_EMAIL_EXPIRES_HOURS = 24
+
+
+def create_email_verification_token(user_id: str) -> str:
+    """A separate token type from create_access_token, not a login session -- purpose
+    claim keeps a verification link from working as a login token if it leaked (e.g. an
+    email client that prefetches links), and vice versa."""
+    payload = {
+        "sub": user_id,
+        "purpose": "verify_email",
+        "exp": datetime.now(timezone.utc) + timedelta(hours=_VERIFY_EMAIL_EXPIRES_HOURS),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_email_verification_token(token: str) -> str:
+    """Returns the user id if valid, raises HTTPException otherwise."""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This verification link is invalid or expired.")
+    if payload.get("purpose") != "verify_email":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This verification link is invalid or expired.")
+    return payload["sub"]
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),

@@ -97,6 +97,7 @@ export const api = {
   signup: (email, password, inviteCode) => post("/api/auth/signup", { email, password, invite_code: inviteCode }),
   login: (email, password) => post("/api/auth/login", { email, password }),
   me: () => get("/api/me"),
+  resendVerification: () => post("/api/auth/resend-verification"),
 
   // -- google connect (Sheets/Gmail/Drive scopes) --
   googleOAuthStart: () => get("/api/oauth/google/start"),

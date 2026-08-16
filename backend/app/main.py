@@ -110,8 +110,24 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+def _send_verification_email(user_id: str, email: str) -> None:
+    from app.auth import create_email_verification_token
+    from pipeline.email_send import send_email
+
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "http://localhost:8000")
+    token = create_email_verification_token(user_id)
+    link = f"{backend_url}/api/auth/verify-email?token={token}"
+    send_email(
+        email,
+        "Verify your email",
+        f'<p>Confirm this is your email address to finish setting up your account.</p>'
+        f'<p><a href="{link}">Verify your email</a></p>'
+        f'<p>This link expires in 24 hours.</p>',
+    )
+
+
 @app.post("/api/auth/signup", response_model=TokenResponse)
-def signup(body: SignupRequest, db: Session = Depends(get_db)):
+def signup(body: SignupRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     invite = db.query(Invite).filter(Invite.code == body.invite_code).one_or_none()
     if invite is None or invite.used_at is not None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid or already-used invite code")
@@ -123,7 +139,35 @@ def signup(body: SignupRequest, db: Session = Depends(get_db)):
     invite.used_at = datetime.utcnow()
     invite.used_by_user_id = user.id
     db.commit()
+    # Best-effort, never blocks signup -- see pipeline/email_send.py's own no-op-if-
+    # unconfigured behavior for the case where BREVO_API_KEY isn't set at all yet.
+    background_tasks.add_task(_send_verification_email, user.id, user.email)
     return TokenResponse(access_token=create_access_token(user.id))
+
+
+@app.get("/api/auth/verify-email")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    from app.auth import decode_email_verification_token
+
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+    try:
+        user_id = decode_email_verification_token(token)
+    except HTTPException:
+        return RedirectResponse(f"{frontend_origin}/dashboard?verify=expired")
+    user = db.get(User, user_id)
+    if user is None:
+        return RedirectResponse(f"{frontend_origin}/dashboard?verify=expired")
+    user.email_verified = True
+    db.commit()
+    return RedirectResponse(f"{frontend_origin}/dashboard?verify=success")
+
+
+@app.post("/api/auth/resend-verification")
+def resend_verification(background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
+    if user.email_verified:
+        return {"status": "already_verified"}
+    background_tasks.add_task(_send_verification_email, user.id, user.email)
+    return {"status": "sent"}
 
 
 @app.post("/api/auth/login", response_model=TokenResponse)
@@ -136,7 +180,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/me")
 def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email}
+    return {"id": user.id, "email": user.email, "email_verified": user.email_verified}
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +252,20 @@ def _require_internal_secret(x_internal_secret: str = Header(default="")):
 
 @app.get("/api/internal/active-users", dependencies=[Depends(_require_internal_secret)])
 def active_users(db: Session = Depends(get_db)):
-    users = db.query(User).filter(User.active.is_(True)).all()
+    """Called hourly now (see .github/workflows/daily.yml), not once a day -- each user
+    picks their own run_hour_utc in the wizard/settings (Profile.run_hour_utc, default 14
+    to match the old single fixed daily time), and only whoever's hour matches the current
+    UTC hour comes back. The join to Profile also means a user still mid-wizard (no
+    Profile row yet) is naturally excluded here instead of getting attempted on every one
+    of the 24 hourly calls a day for nothing -- _run_pipeline_in_background's own
+    profile-row check stays too, as a second guard, not replaced by this one."""
+    now_hour = datetime.utcnow().hour
+    users = (
+        db.query(User)
+        .join(Profile, Profile.user_id == User.id)
+        .filter(User.active.is_(True), Profile.run_hour_utc == now_hour)
+        .all()
+    )
     return {"user_ids": [u.id for u in users]}
 
 

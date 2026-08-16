@@ -153,6 +153,7 @@ def set_lanes(body: dict, user: User = Depends(get_current_user), db: Session = 
     draft["ashby_boards"] = [str(b).strip() for b in (body.get("ashby_boards") or []) if str(b).strip()]
     draft["adzuna_country"] = str(body.get("adzuna_country", "ca")).strip().lower()
     draft["target_countries"] = [str(c).strip().lower() for c in (body.get("target_countries") or []) if str(c).strip()]
+    draft["run_hour_utc"] = max(0, min(23, int(body.get("run_hour_utc", 14) or 14)))
 
     row.draft_json = draft
     db.commit()
@@ -181,6 +182,9 @@ def _build_profile_and_resumes(user_id: str, draft: dict, granted_email: str) ->
         report_email=granted_email,
     )
     resumes = {name: wizard_logic.build_resume_json(draft["shared_resume"], name, lane_names) for name in lane_names}
+    # Not part of pipeline.config.Profile's shape (the scheduler is the only reader, see
+    # main.py's active_users()) -- attached here only so Review.jsx has something to show.
+    profile_dict["run_hour_utc"] = draft.get("run_hour_utc", 14)
     return profile_dict, resumes
 
 
@@ -245,6 +249,7 @@ def finalize(user: User = Depends(get_current_user), db: Session = Depends(get_d
     profile_row.ashby_boards_json = profile_dict["ashby_boards"]
     profile_row.target_countries_json = profile_dict["target_countries"]
     profile_row.apply_daily_cap = profile_dict["apply_daily_cap"]
+    profile_row.run_hour_utc = profile_dict["run_hour_utc"]
     profile_row.resumes_json = resumes
     db.commit()
 

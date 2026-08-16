@@ -277,6 +277,7 @@ export default function Dashboard() {
           <p className="lede">Everything here lives in your account's own database, and mirrors out to your Google Sheet as a readable backup.</p>
         </div>
         <div className="dash-head-links">
+          <Link className="button secondary" to="/setup/about">Edit setup</Link>
           <Link className="button secondary" to="/cold-email">Cold email</Link>
           <Link className="button primary" to="/swipe">
             Swipe queue{data.swipe_queue_count ? ` (${data.swipe_queue_count})` : ""}

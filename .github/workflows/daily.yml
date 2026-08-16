@@ -6,10 +6,17 @@ name: daily-pipeline-trigger
 # backend/app/main.py's /api/internal/active-users and /api/internal/run/{user_id}.
 # Staying on GitHub Actions for this (rather than a paid hosted cron/worker) is the free-tier
 # lever the plan is built around.
+#
+# Runs hourly, not once a day, now that each user picks their own run_hour_utc (Profile
+# column, set in the wizard/settings) -- /api/internal/active-users itself does the actual
+# filtering (only whoever's chosen hour matches right now comes back), so this workflow's
+# own job is unchanged: fetch whoever's active-users returns this run, trigger each. Kept
+# on the same :30 minute offset the old single daily run used, just repeated every hour
+# instead of once.
 
 on:
   schedule:
-    - cron: "30 14 * * *"
+    - cron: "30 * * * *"
   workflow_dispatch: {}
 
 jobs:

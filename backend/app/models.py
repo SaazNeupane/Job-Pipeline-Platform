@@ -28,6 +28,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
     profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False)
     oauth_credentials: Mapped[list["OAuthCredential"]] = relationship(back_populates="user")
@@ -49,6 +50,9 @@ class Profile(Base):
     adzuna_country: Mapped[str] = mapped_column(String, default="us")
     apply_daily_cap: Mapped[int] = mapped_column(Integer, default=15)
     github_repo: Mapped[str] = mapped_column(String, default="")
+    # UTC hour (0-23) the scheduler runs this user's daily pipeline in -- see
+    # main.py's active_users(), called hourly by .github/workflows/daily.yml.
+    run_hour_utc: Mapped[int] = mapped_column(Integer, default=14)
 
     # JSONB blobs matching the dataclass shapes in pipeline/config.py verbatim --
     # lanes: list[Lane]-shaped dicts, cold_email: ColdEmailConfig-shaped dict,

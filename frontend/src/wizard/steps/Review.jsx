@@ -27,6 +27,9 @@ function ReviewSummary({ profile, resumes }) {
         <dt>Daily queue limit</dt>
         <dd>{profile.apply_daily_cap} new postings per lane, per day</dd>
 
+        <dt>Run time</dt>
+        <dd>{String(profile.run_hour_utc ?? 14).padStart(2, "0")}:00 UTC</dd>
+
         <dt>Connected Google account</dt>
         <dd>{profile.gmail_address}</dd>
 

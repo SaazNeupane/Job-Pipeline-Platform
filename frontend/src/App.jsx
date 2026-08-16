@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { api } from "./api.js";
 import Logo from "./components/Logo.jsx";
 import ToastHost from "./components/ToastHost.jsx";
+import { showToast } from "./toast.js";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
@@ -35,9 +38,49 @@ function AccountLink() {
   );
 }
 
+function VerifyEmailBanner() {
+  const { user } = useAuth();
+  const [sent, setSent] = useState(false);
+
+  if (!user || user.email_verified) return null;
+
+  async function resend() {
+    try {
+      await api.resendVerification();
+      setSent(true);
+    } catch {
+      // api.js's handle() already toasted the reason
+    }
+  }
+
+  return (
+    <div className="banner info verify-banner">
+      <p>
+        Verify your email to keep your account secure. {sent ? "Sent, check your inbox." : (
+          <button type="button" className="ghost" onClick={resend}>Resend verification email</button>
+        )}
+      </p>
+    </div>
+  );
+}
+
 export default function App() {
-  const pathname = useLocation().pathname;
+  const location = useLocation();
+  const pathname = location.pathname;
   const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/swipe") || pathname.startsWith("/cold-email");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const verify = params.get("verify");
+    if (!verify) return;
+    if (verify === "success") showToast("Email verified.", "pine");
+    else if (verify === "expired") showToast("That verification link expired or was already used.");
+    params.delete("verify");
+    const rest = params.toString();
+    window.history.replaceState({}, "", location.pathname + (rest ? `?${rest}` : ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   return (
     <>
       <ToastHost />
@@ -52,6 +95,7 @@ export default function App() {
         </div>
       </header>
       <main className={`container${isDashboard ? " wide" : ""}`}>
+        <VerifyEmailBanner />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/guide" element={<Navigate to="/#guide" replace />} />
