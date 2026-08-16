@@ -29,7 +29,7 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.db import SessionLocal, get_db
-from app.models import Invite, User
+from app.models import Invite, Profile, User
 from app.routers import dashboard as dashboard_router
 from app.routers import swipe as swipe_router
 from app.routers import wizard as wizard_router
@@ -228,13 +228,24 @@ def _run_pipeline_in_background(user_id: str) -> None:
     """A full run (search + filter + several LLM calls per lane) can easily exceed what's
     safe to hold a single HTTP request open for on Render's free tier -- runs in the
     background with its own DB session (the request's session closes as soon as the 202
-    response goes out) instead of blocking the scheduler's per-user call."""
+    response goes out) instead of blocking the scheduler's per-user call.
+
+    active_users() includes every signed-up user regardless of wizard progress, so the
+    daily cron will hit users mid-wizard (no Profile row yet) -- skip those cleanly instead
+    of letting load_profile()'s LookupError blow up as an unhandled background-task
+    exception. Any other failure is logged with the user id so it's actually visible in
+    server logs instead of an anonymous traceback."""
     from pipeline.run_pipeline import run
 
     db = SessionLocal()
     pipeline_config.set_session(db)
     try:
+        if db.query(Profile).filter(Profile.user_id == user_id).first() is None:
+            logging.info("Skipping daily run for %s: wizard not finished yet, no profile row", user_id)
+            return
         run(user_id)
+    except Exception:
+        logging.exception("Daily run failed for user %s", user_id)
     finally:
         pipeline_config.set_session(None)
         db.close()
