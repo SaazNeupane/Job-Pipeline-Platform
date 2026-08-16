@@ -252,7 +252,7 @@ export default function Dashboard() {
       <div className="dash-head">
         <div>
           <h1>Your dashboard</h1>
-          <p className="lede">A friendlier view of your Google Sheet. Nothing here is stored separately from it.</p>
+          <p className="lede">Everything here lives in your account's own database, and mirrors out to your Google Sheet as a readable backup.</p>
         </div>
         <div className="dash-head-links">
           <Link className="button secondary" to="/cold-email">Cold email</Link>
@@ -276,7 +276,7 @@ export default function Dashboard() {
       )}
 
       {data.apply_daily_cap != null && (
-        <p className="lede" style={{ marginTop: "-0.5rem" }}>We submit up to {data.apply_daily_cap} applications a day for you.</p>
+        <p className="lede" style={{ marginTop: "-0.5rem" }}>Up to {data.apply_daily_cap} new postings per lane get queued for you to swipe on each day. Nothing gets applied to without you.</p>
       )}
 
       <div className="stat-strip">
@@ -392,7 +392,7 @@ export default function Dashboard() {
       <ConfirmDialog
         open={!!confirmTarget}
         title={confirmTarget?.type === "bulk" ? `Dismiss ${selected.size} job${selected.size === 1 ? "" : "s"}?` : "Dismiss this job?"}
-        body="It won't show up here again. You can still find it in your Google Sheet if you change your mind."
+        body="It won't show up here again, but it's not deleted. It's still in your account (and your Google Sheet) marked dismissed, if you change your mind."
         confirmLabel="Dismiss"
         onConfirm={confirmDismiss}
         onCancel={() => setConfirmTarget(null)}

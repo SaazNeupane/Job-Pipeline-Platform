@@ -48,7 +48,7 @@ export default function Google() {
   return (
     <>
       <h1>Connect your Google account</h1>
-      <p className="lede">The pipeline reads and writes a Google Sheet, sends application emails from your Gmail, and stores held resumes on your Drive, all under your own account, never anyone else's.</p>
+      <p className="lede">The pipeline reads and writes a Google Sheet, sends cold emails from your Gmail and checks that same inbox for a bounce or reply, and stores held resumes on your Drive, all under your own account, never anyone else's.</p>
 
       {error && <p className="error-banner">{error}</p>}
       {oauthError && <p className="error-banner">{ERROR_MESSAGES[oauthError] || "Couldn't connect. Try again."}</p>}

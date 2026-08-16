@@ -24,8 +24,8 @@ function ReviewSummary({ profile, resumes }) {
         <dt>Countries accepted</dt>
         <dd>{profile.target_countries?.length ? profile.target_countries.join(", ") : "any"}</dd>
 
-        <dt>Daily apply limit</dt>
-        <dd>{profile.apply_daily_cap} per day</dd>
+        <dt>Daily queue limit</dt>
+        <dd>{profile.apply_daily_cap} new postings per lane, per day</dd>
 
         <dt>Connected Google account</dt>
         <dd>{profile.gmail_address}</dd>

@@ -44,7 +44,7 @@ export default function App() {
       <header className="topbar">
         <Link to="/" className="brand">
           <Logo />
-          Job Pipeline
+          Crond
         </Link>
         <div className="topbar-right">
           <Link to="/#guide" className="topbar-link">Guide</Link>

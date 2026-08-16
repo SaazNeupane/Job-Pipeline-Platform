@@ -3,7 +3,7 @@
 // header/favicon size without a network request.
 export default function Logo({ size = 30 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 512 512" role="img" aria-label="Job Pipeline">
+    <svg width={size} height={size} viewBox="0 0 512 512" role="img" aria-label="Crond">
       <rect width="512" height="512" rx="48" fill="#0c150e" />
       <g fill="none" stroke="#22c55e" strokeWidth="62" strokeLinecap="round" strokeLinejoin="round">
         <path d="M 153.6 143.36 L 215.04 256.0 L 153.6 368.64" />

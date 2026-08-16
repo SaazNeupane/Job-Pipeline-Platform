@@ -11,7 +11,7 @@ export default function Done() {
           The daily run happens automatically. Once one finds new postings, swipe through them from your{" "}
           <Link to="/dashboard">dashboard</Link> to pick which ones to apply to.
         </p>
-        <p className="hint" style={{ marginBottom: 0 }}>We submit up to 15 applications a day for you, so a backlog never piles up unattended.</p>
+        <p className="hint" style={{ marginBottom: 0 }}>Each lane queues a capped number of new postings a day, so the swipe queue never floods. You're still the one who applies.</p>
       </div>
     </>
   );

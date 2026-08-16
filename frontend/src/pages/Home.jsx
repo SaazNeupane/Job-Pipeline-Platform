@@ -58,7 +58,7 @@ const SETUP_STEPS = [
   {
     n: "06",
     title: "Review",
-    body: "A last look at everything before it's saved. Continuing creates your own Google Sheet, where every result lives from then on: applications sent, postings held for review, a daily summary.",
+    body: "A last look at everything before it's saved. Continuing creates your own Google Sheet, a readable mirror of everything that happens from then on: applications sent, postings held for review, a daily summary. Your account's own database is what actually drives the app; the Sheet is just a copy you can open and read.",
   },
   {
     n: "07",
@@ -74,7 +74,7 @@ function TerminalWindow({ children }) {
         <span className="terminal-dot" />
         <span className="terminal-dot" />
         <span className="terminal-dot" />
-        <span className="terminal-title">job-pipeline — zsh</span>
+        <span className="terminal-title">crond — zsh</span>
       </div>
       <div className="terminal-body">{children}</div>
     </div>
