@@ -9,7 +9,6 @@ export default function About() {
     first_name: a.first_name || "", last_name: a.last_name || "", country: a.country || "Canada",
     address: a.address || "", latitude: a.latitude ?? "", longitude: a.longitude ?? "",
   });
-  const [manualCoords, setManualCoords] = useState(Boolean(a.latitude) && !a.address);
   const [geocoding, setGeocoding] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -21,7 +20,7 @@ export default function About() {
     setError("");
 
     const applicant = { ...form };
-    if (!manualCoords && form.address.trim()) {
+    if (form.address.trim()) {
       setGeocoding(true);
       try {
         const { latitude, longitude } = await api.geocode(form.address.trim());
@@ -30,7 +29,6 @@ export default function About() {
       } catch (err) {
         setGeocoding(false);
         setError(err.message);
-        setManualCoords(true);
         return;
       }
       setGeocoding(false);
@@ -64,28 +62,11 @@ export default function About() {
 
         <fieldset>
           <legend>Address (optional, only needed for a commute-radius lane)</legend>
-          {!manualCoords ? (
-            <>
-              <label>Address<input value={form.address} onChange={set("address")} placeholder="e.g. 123 Main St, Toronto, ON" /></label>
-              <p className="hint">
-                Only needed if you pick a lane with a commute-radius filter. Looked up automatically when you continue —
-                nothing to copy or paste.
-              </p>
-              <button type="button" className="ghost" onClick={() => setManualCoords(true)}>
-                Enter coordinates directly instead
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="grid2">
-                <label>Latitude<input value={form.latitude} onChange={set("latitude")} placeholder="e.g. 43.7315" /></label>
-                <label>Longitude<input value={form.longitude} onChange={set("longitude")} placeholder="e.g. -79.7624" /></label>
-              </div>
-              <button type="button" className="ghost" onClick={() => setManualCoords(false)}>
-                Use an address instead
-              </button>
-            </>
-          )}
+          <label>Address<input value={form.address} onChange={set("address")} placeholder="e.g. 123 Main St, Toronto, ON" /></label>
+          <p className="hint">
+            Only needed if you pick a lane with a commute-radius filter. Looked up automatically when you continue.
+            Nothing to copy or paste.
+          </p>
         </fieldset>
 
         <div className="wizard-actions">

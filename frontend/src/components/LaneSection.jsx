@@ -15,7 +15,9 @@ export default function LaneSection({ section, tone, children }) {
         <span className="lane-count">{section.rows.length}</span>
         <span className={`lane-chevron${collapsed ? " collapsed" : ""}`}>▾</span>
       </button>
-      {!collapsed && children}
+      <div className={`lane-section-body${collapsed ? "" : " open"}`}>
+        <div className="lane-section-body-inner">{children}</div>
+      </div>
     </div>
   );
 }

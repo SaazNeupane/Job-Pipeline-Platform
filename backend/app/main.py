@@ -15,7 +15,7 @@ import os
 import secrets as _secrets
 import uuid
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
@@ -224,7 +224,9 @@ def mint_invite(db: Session = Depends(get_db)):
     return {"code": invite.code}
 
 
-def _run_pipeline_in_background(user_id: str) -> None:
+def _run_pipeline_in_background(
+    user_id: str, lane_filter: str | None = None, max_age_days: int | None = None, cold_email_only: bool = False,
+) -> None:
     """A full run (search + filter + several LLM calls per lane) can easily exceed what's
     safe to hold a single HTTP request open for on Render's free tier -- runs in the
     background with its own DB session (the request's session closes as soon as the 202
@@ -243,7 +245,7 @@ def _run_pipeline_in_background(user_id: str) -> None:
         if db.query(Profile).filter(Profile.user_id == user_id).first() is None:
             logging.info("Skipping daily run for %s: wizard not finished yet, no profile row", user_id)
             return
-        run(user_id)
+        run(user_id, lane_filter=lane_filter, max_age_days=max_age_days, cold_email_only=cold_email_only)
     except Exception:
         logging.exception("Daily run failed for user %s", user_id)
     finally:
@@ -255,6 +257,48 @@ def _run_pipeline_in_background(user_id: str) -> None:
 def run_pipeline_for_user(user_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(_run_pipeline_in_background, user_id)
     return {"status": "started", "user_id": user_id}
+
+
+class RunNowRequest(BaseModel):
+    lane_filter: str | None = None
+    max_age_days: int | None = None
+    cold_email_only: bool = False
+
+
+@app.post("/api/run-now", status_code=status.HTTP_202_ACCEPTED)
+def run_now(
+    background_tasks: BackgroundTasks,
+    body: RunNowRequest | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """User-facing manual trigger for their own daily run, same underlying job as the
+    scheduler's /api/internal/run/{user_id} -- one run per calendar day, checked against
+    DailySummary rather than any separate cooldown state, since a summary row is exactly
+    what a completed run produces. Optional overrides (lane_filter/max_age_days/
+    cold_email_only) mirror run_pipeline.run()'s own optional parameters -- e.g. a manual
+    re-run of one lane after tweaking its keywords, or widening the recency window past
+    the scheduled run's default cutoff."""
+    body = body or RunNowRequest()
+    from pipeline.postings_store import get_daily_summaries
+
+    # The same-day guard only applies to a full default run -- a scoped re-run (one
+    # lane, or cold-email-only) is a deliberate narrow action, not a duplicate of the
+    # day's real run, so it's exempt (matches the docstring's "re-run one lane after
+    # tweaking its keywords" use case, which would be pointless if blocked every time
+    # the scheduled run already fired today).
+    if not body.lane_filter and not body.cold_email_only:
+        pipeline_config.set_session(db)
+        today = date.today().isoformat()
+        already_ran = any(s["date"] == today for s in get_daily_summaries(user.id))
+        pipeline_config.set_session(None)
+        if already_ran:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Already ran today. Try again tomorrow.")
+
+    background_tasks.add_task(
+        _run_pipeline_in_background, user.id, body.lane_filter, body.max_age_days, body.cold_email_only
+    )
+    return {"status": "started"}
 
 
 # ---------------------------------------------------------------------------

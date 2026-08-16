@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
+import { CheckCircleIcon, FilterIcon, MailIcon, SearchIcon, TailorIcon } from "../components/icons.jsx";
+import StatItem from "../components/StatItem.jsx";
 import { useApiData } from "../hooks/useApiData.js";
 
 function ColdEmailCard({ row }) {
@@ -48,26 +50,11 @@ export default function ColdEmail() {
 
       {latestSummary && (
         <div className="stat-strip">
-          <div className="stat-item">
-            <div className="eyebrow">Scanned</div>
-            <div className="stat-num">{latestSummary.cold_email_scanned || 0}</div>
-          </div>
-          <div className="stat-item">
-            <div className="eyebrow">Eligible</div>
-            <div className="stat-num">{latestSummary.cold_email_eligible || 0}</div>
-          </div>
-          <div className="stat-item">
-            <div className="eyebrow">Relevant to your resume</div>
-            <div className="stat-num">{latestSummary.cold_email_matched || 0}</div>
-          </div>
-          <div className="stat-item">
-            <div className="eyebrow">Contacts found</div>
-            <div className="stat-num signal">{latestSummary.cold_email_contacts_found || 0}</div>
-          </div>
-          <div className="stat-item">
-            <div className="eyebrow">Sent</div>
-            <div className="stat-num pine">{data.cold_emails.length}</div>
-          </div>
+          <StatItem icon={<SearchIcon />} label="Scanned" value={latestSummary.cold_email_scanned || 0} />
+          <StatItem icon={<FilterIcon />} label="Eligible" value={latestSummary.cold_email_eligible || 0} />
+          <StatItem icon={<TailorIcon />} label="Relevant to your resume" value={latestSummary.cold_email_matched || 0} />
+          <StatItem icon={<CheckCircleIcon />} label="Contacts found" value={latestSummary.cold_email_contacts_found || 0} tone="signal" />
+          <StatItem icon={<MailIcon />} label="Sent" value={data.cold_emails.length} tone="pine" />
         </div>
       )}
 

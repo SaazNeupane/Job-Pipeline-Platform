@@ -123,4 +123,5 @@ export const api = {
   dismiss: (postingKey) => post(`/api/dashboard/dismiss/${encodeURIComponent(postingKey)}`),
   retry: (postingKey) => post(`/api/dashboard/retry/${encodeURIComponent(postingKey)}`),
   dismissBulk: (postingKeys) => post("/api/dashboard/dismiss-bulk", { posting_keys: postingKeys }),
+  runNow: (overrides) => post("/api/run-now", overrides || {}),
 };

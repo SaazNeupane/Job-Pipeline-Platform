@@ -12,7 +12,9 @@ export default function Collapsible({ title, defaultCollapsed = false, children 
         <h2>{title}</h2>
         <span className={`lane-chevron${collapsed ? " collapsed" : ""}`}>▾</span>
       </button>
-      {!collapsed && children}
+      <div className={`collapsible-body${collapsed ? "" : " open"}`}>
+        <div className="collapsible-body-inner">{children}</div>
+      </div>
     </div>
   );
 }

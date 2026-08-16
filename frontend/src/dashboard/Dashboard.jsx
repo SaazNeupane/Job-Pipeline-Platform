@@ -5,6 +5,8 @@ import Collapsible from "../components/Collapsible.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
+import { CheckCircleIcon, InboxIcon, MailIcon, RunsIcon } from "../components/icons.jsx";
+import StatItem from "../components/StatItem.jsx";
 import { useApiData } from "../hooks/useApiData.js";
 import { sourceLabel } from "../sourceLabels.js";
 
@@ -144,6 +146,26 @@ export default function Dashboard() {
   const [busyRows, setBusyRows] = useState({}); // posting_key -> "promote" | "dismiss"
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState(null); // { type: "single", key } | { type: "bulk" }
+  const [runState, setRunState] = useState("idle"); // idle | pending | started
+  const [runLane, setRunLane] = useState("all");
+  const [runMaxAgeDays, setRunMaxAgeDays] = useState("");
+  const [runColdEmailOnly, setRunColdEmailOnly] = useState(false);
+
+  async function runNow() {
+    setRunState("pending");
+    try {
+      await api.runNow({
+        lane_filter: runLane === "all" ? null : runLane,
+        max_age_days: runMaxAgeDays ? Number(runMaxAgeDays) : null,
+        cold_email_only: runColdEmailOnly,
+      });
+      setRunState("started");
+    } catch {
+      // api.js's handle() already fired a toast with the real reason (e.g. "Already
+      // ran today. Try again tomorrow.") -- just reset the button, nothing else to show.
+      setRunState("idle");
+    }
+  }
 
   // A right-swipe writes its pending_approval row immediately
   // (reason_held="generating") and fills in the resume/cover letter a few
@@ -275,27 +297,61 @@ export default function Dashboard() {
         </div>
       )}
 
-      {data.apply_daily_cap != null && (
-        <p className="lede" style={{ marginTop: "-0.5rem" }}>Up to {data.apply_daily_cap} new postings per lane get queued for you to swipe on each day. Nothing gets applied to without you.</p>
-      )}
+      <div className="run-bar">
+        <div>
+          {data.apply_daily_cap != null && (
+            <p className="lede" style={{ marginBottom: runState === "started" ? "0.3rem" : 0 }}>
+              Up to {data.apply_daily_cap} new postings per lane get queued for you to swipe on each day. Nothing gets applied to without you.
+            </p>
+          )}
+          {runState === "started" && <p className="hint" style={{ margin: 0 }}>Run started. Check back in a few minutes.</p>}
+        </div>
+        <button type="button" className="primary" onClick={runNow} disabled={runState === "pending" || runState === "started"}>
+          {runState === "pending" ? "Starting…" : runState === "started" ? "Run started" : "Run now"}
+        </button>
+
+        <details className="advanced" style={{ flexBasis: "100%" }}>
+          <summary>Advanced: run just one lane, widen the date window, or cold email only</summary>
+          <div className="run-override">
+            <label>
+              Lane
+              <select value={runLane} onChange={(e) => setRunLane(e.target.value)} disabled={runColdEmailOnly}>
+                <option value="all">All lanes</option>
+                {data.lane_names.map((n) => (
+                  <option key={n} value={n}>{data.lane_labels[n] || n.replace(/_/g, " ")}</option>
+                ))}
+              </select>
+            </label>
+            <div className="run-override-days">
+              <label>
+                Recency window
+                <input
+                  type="number" min="1" placeholder="default"
+                  value={runMaxAgeDays} onChange={(e) => setRunMaxAgeDays(e.target.value)}
+                />
+              </label>
+              <span>days</span>
+            </div>
+            <label className="checkbox-row">
+              <input
+                type="checkbox" checked={runColdEmailOnly}
+                onChange={(e) => setRunColdEmailOnly(e.target.checked)}
+              />
+              Cold email only, skip job search
+            </label>
+            <p className="hint">
+              A scoped run like this doesn't count against today's one-run limit. Only a full
+              default run does.
+            </p>
+          </div>
+        </details>
+      </div>
 
       <div className="stat-strip">
-        <div className="stat-item">
-          <div className="eyebrow">Needs review</div>
-          <div className="stat-num signal">{data.pending.length}</div>
-        </div>
-        <div className="stat-item">
-          <div className="eyebrow">Applied</div>
-          <div className="stat-num pine">{data.applied.length}</div>
-        </div>
-        <Link className="stat-item stat-item-link" to="/cold-email">
-          <div className="eyebrow">Cold emails</div>
-          <div className="stat-num">{data.cold_emails.length}</div>
-        </Link>
-        <div className="stat-item">
-          <div className="eyebrow">Runs logged</div>
-          <div className="stat-num">{data.summary.length}</div>
-        </div>
+        <StatItem icon={<InboxIcon />} label="Needs review" value={data.pending.length} tone="signal" />
+        <StatItem icon={<CheckCircleIcon />} label="Applied" value={data.applied.length} tone="pine" />
+        <StatItem icon={<MailIcon />} label="Cold emails" value={data.cold_emails.length} to="/cold-email" />
+        <StatItem icon={<RunsIcon />} label="Runs logged" value={data.summary.length} />
       </div>
 
       <h2 style={{ marginTop: 0 }}>Needs your review</h2>
@@ -347,7 +403,10 @@ export default function Dashboard() {
           </LaneSection>
         ))
       ) : (
-        <div className="empty-state">{data.pending.length ? "No postings match these filters." : "Nothing waiting on you right now."}</div>
+        <div className="empty-state">
+          {!data.pending.length && <CheckCircleIcon />}
+          {data.pending.length ? "No postings match these filters." : "Nothing waiting on you right now."}
+        </div>
       )}
 
       <h2>Applied</h2>

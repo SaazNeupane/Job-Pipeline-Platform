@@ -1,25 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import FlowRail from "../components/FlowRail.jsx";
+import { ApplyIcon, FilterIcon, SearchIcon, SwipeIcon, TailorIcon } from "../components/icons.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
-
-const ICON_PROPS = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round" };
-
-const SearchIcon = () => (
-  <svg {...ICON_PROPS}><circle cx="11" cy="11" r="6.5" /><path d="M20 20l-4.5-4.5" /></svg>
-);
-const FilterIcon = () => (
-  <svg {...ICON_PROPS}><path d="M4 5h16M7 12h10M10.5 19h3" /></svg>
-);
-const SwipeIcon = () => (
-  <svg {...ICON_PROPS}><rect x="6" y="4" width="12" height="16" rx="2" /><path d="M2 12h3M19 12h3M4 9l-2 3 2 3M20 9l2 3-2 3" /></svg>
-);
-const TailorIcon = () => (
-  <svg {...ICON_PROPS}><path d="M4 20l1-4 11-11 3 3-11 11-4 1z" /><path d="M13 6l3 3" /></svg>
-);
-const ApplyIcon = () => (
-  <svg {...ICON_PROPS}><path d="M21 3L11 13" /><path d="M21 3l-7 18-4-8-8-4 19-6z" /></svg>
-);
+import { useInViewport } from "../hooks/useInViewport.js";
+import { useTypewriter } from "../hooks/useTypewriter.js";
 
 const PROCESS = [
   { key: "search", label: "Search real postings", icon: <SearchIcon /> },
@@ -84,6 +69,10 @@ function TerminalWindow({ children }) {
 export default function Home() {
   const { user, ready } = useAuth();
   const { hash } = useLocation();
+  const { shown: promptShown, done: promptDone } = useTypewriter("./run_pipeline --daily", 32);
+  const [stage, setStage] = useState(0); // 0 = typing, 1 = headline, 2 = lede, 3 = actions
+  const [processRef, processInView] = useInViewport(0.3);
+  const [guideRef, guideInView] = useInViewport(0.15);
 
   useEffect(() => {
     if (hash === "#guide") {
@@ -91,19 +80,34 @@ export default function Home() {
     }
   }, [hash]);
 
+  useEffect(() => {
+    if (!promptDone) return;
+    const timers = [
+      setTimeout(() => setStage(1), 150),
+      setTimeout(() => setStage(2), 550),
+      setTimeout(() => setStage(3), 900),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [promptDone]);
+
   return (
     <>
       <div className="hero">
         <TerminalWindow>
-          <p className="terminal-line"><span className="terminal-prompt">$</span> ./run_pipeline --daily</p>
-          <h1 className="terminal-h1">Your job search, running itself<span className="terminal-cursor">_</span></h1>
-          <p className="lede terminal-lede">
+          <p className="terminal-line">
+            <span className="terminal-prompt">$</span> {promptShown}
+            {!promptDone && <span className="terminal-cursor">_</span>}
+          </p>
+          <h1 className={`terminal-h1 reveal${stage >= 1 ? " reveal-in" : ""}`}>
+            Your job search, running itself{stage >= 1 && <span className="terminal-cursor">_</span>}
+          </h1>
+          <p className={`lede terminal-lede reveal${stage >= 2 ? " reveal-in" : ""}`}>
             It searches real postings every day and filters them down to ones worth your time. You swipe
             through to pick the jobs you actually want, and it tailors a resume and cover letter for each
             one you like. You apply yourself, from your own dashboard. Everything runs under your own
             accounts, and it never invents anything about you.
           </p>
-          <div className="hero-actions">
+          <div className={`hero-actions reveal${stage >= 3 ? " reveal-in" : ""}`}>
             {ready && user ? (
               <Link className="button primary" to="/dashboard">Go to your dashboard</Link>
             ) : (
@@ -114,7 +118,7 @@ export default function Home() {
         </TerminalWindow>
       </div>
 
-      <div className="process-strip">
+      <div ref={processRef} className={`process-strip${processInView ? " in-view" : ""}`}>
         <FlowRail horizontal steps={PROCESS.map((p) => ({ ...p, state: "static" }))} />
       </div>
 
@@ -140,7 +144,7 @@ export default function Home() {
           </p>
         </div>
 
-        <ol className="guide-steps">
+        <ol ref={guideRef} className={`guide-steps${guideInView ? " in-view" : ""}`}>
           {SETUP_STEPS.map((step) => (
             <li key={step.n} className="guide-step">
               <span className="guide-step-num">{step.n}</span>
