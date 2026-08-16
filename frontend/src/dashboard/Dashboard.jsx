@@ -234,6 +234,7 @@ export default function Dashboard() {
   }
 
   if (errorCode === "google_reauth_required") return <GoogleReconnectBanner onReconnected={load} />;
+  if (errorCode === "profile_missing") return <p className="error-banner">{error} <Link to="/setup/about">Finish setup</Link></p>;
   if (error) return <p className="error-banner">{error}</p>;
   if (!data) return <Loading />;
 

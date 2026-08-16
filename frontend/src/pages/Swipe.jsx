@@ -64,7 +64,7 @@ function SwipeCardPeek({ row, laneLabels }) {
 const EXIT_ANIMATION_MS = 260;
 
 export default function Swipe() {
-  const { data, error, setError, setData } = useApiData(() => api.swipeQueue(), []);
+  const { data, error, errorCode, setError, setData } = useApiData(() => api.swipeQueue(), []);
   const queue = data?.queue;
   const laneLabels = data?.lane_labels || {};
   const [busy, setBusy] = useState(false);
@@ -119,6 +119,7 @@ export default function Swipe() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  if (errorCode === "profile_missing") return <p className="error-banner">{error} <Link to="/setup/about">Finish setup</Link></p>;
   if (error && !data) return <p className="error-banner">{error}</p>;
   if (!data) return <Loading />;
 
