@@ -14,8 +14,9 @@ access, carried over from the Sheets-tab era, doesn't need to change."""
 
 from __future__ import annotations
 
-import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+from decimal import Decimal
 
 from app.models import ColdEmail as ColdEmailRow
 from app.models import DailySummary as DailySummaryRow
@@ -87,8 +88,20 @@ def _cold_email_to_dict(row: ColdEmailRow) -> dict:
 
 def _sheet_row_for_tab(tab: str, fields: dict) -> dict:
     """Filters+blanks a full row dict down to just the columns a given Sheet tab actually
-    has, converting None to "" (Sheets has no null, only blank cells)."""
-    return {col: ("" if fields.get(col) is None else fields.get(col)) for col in _TAB_COLUMNS[tab]}
+    has, converting None to "" (Sheets has no null, only blank cells). salary_min/salary_max
+    come back from the Numeric DB columns as Decimal (see PostingRow in app/models.py) --
+    the Sheets API request body is JSON-encoded and json.dumps can't serialize Decimal,
+    so it's converted to float here specifically for the mirror write (Postgres keeps the
+    original Decimal, this only affects the Sheet copy)."""
+    def _value(col: str):
+        v = fields.get(col)
+        if v is None:
+            return ""
+        if isinstance(v, Decimal):
+            return float(v)
+        return v
+
+    return {col: _value(col) for col in _TAB_COLUMNS[tab]}
 
 
 def _mirror_worker(user: str, fn) -> None:
@@ -110,8 +123,21 @@ def _mirror_worker(user: str, fn) -> None:
         db.close()
 
 
+# A run can queue 15+ postings in a tight loop, each firing its own mirror write. Confirmed
+# live 2026-08-16: spawning one raw thread per write crashed the whole interpreter with
+# STATUS_HEAP_CORRUPTION (0xc0000374, Windows Error Reporting). Cutting concurrency to 2
+# workers still crashed (STATUS_ACCESS_VIOLATION, 0xc0000005) -- root cause is
+# google_auth.py's _service_cache: it caches and shares ONE googleapiclient service object
+# (wrapping an httplib2.Http connection) per user across every caller, and httplib2 is not
+# thread-safe. Any two threads doing concurrent I/O through that same cached service can
+# corrupt the interpreter's native heap. max_workers=1 serializes every mirror write so no
+# two threads ever touch that shared service concurrently -- still fire-and-forget from the
+# caller's perspective (never blocks), just no longer actually concurrent internally.
+_MIRROR_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sheet-mirror")
+
+
 def _fire_mirror(user: str, fn) -> None:
-    threading.Thread(target=_mirror_worker, args=(user, fn), daemon=True).start()
+    _MIRROR_EXECUTOR.submit(_mirror_worker, user, fn)
 
 
 def _mirror_create(user: str, tab: str, fields: dict) -> None:
