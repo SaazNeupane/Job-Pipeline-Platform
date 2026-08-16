@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const { signup } = useAuth();
@@ -15,7 +16,7 @@ export default function Signup() {
     setError("");
     setBusy(true);
     try {
-      await signup(email, password);
+      await signup(email, password, inviteCode);
       navigate("/setup/about");
     } catch (err) {
       setError(err.message);
@@ -31,6 +32,7 @@ export default function Signup() {
       <form onSubmit={submit}>
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></label>
         <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} /></label>
+        <label>Invite code<input type="text" value={inviteCode} onChange={(e) => setInviteCode(e.target.value)} required /></label>
         <div className="wizard-actions">
           <button type="submit" className="primary" disabled={busy}>{busy ? "Creating…" : "Create account"}</button>
         </div>

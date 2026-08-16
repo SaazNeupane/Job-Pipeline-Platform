@@ -60,6 +60,7 @@ app.add_middleware(
 )
 
 INTERNAL_SHARED_SECRET = os.environ["INTERNAL_SHARED_SECRET"]
+INVITE_CODE = os.environ["INVITE_CODE"]
 
 
 @app.middleware("http")
@@ -96,6 +97,7 @@ def health():
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
+    invite_code: str
 
 
 class LoginRequest(BaseModel):
@@ -110,6 +112,8 @@ class TokenResponse(BaseModel):
 
 @app.post("/api/auth/signup", response_model=TokenResponse)
 def signup(body: SignupRequest, db: Session = Depends(get_db)):
+    if not _secrets.compare_digest(body.invite_code, INVITE_CODE):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Invalid invite code")
     if db.query(User).filter(User.email == body.email).one_or_none() is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
     user = User(id=str(uuid.uuid4()), email=body.email, password_hash=hash_password(body.password))

@@ -80,7 +80,7 @@ function upload(path, file, fieldName, extraFields) {
 
 export const api = {
   // -- auth (app account, not Google) --
-  signup: (email, password) => post("/api/auth/signup", { email, password }),
+  signup: (email, password, inviteCode) => post("/api/auth/signup", { email, password, invite_code: inviteCode }),
   login: (email, password) => post("/api/auth/login", { email, password }),
   me: () => get("/api/me"),
 
