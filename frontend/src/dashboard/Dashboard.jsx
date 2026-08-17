@@ -263,9 +263,16 @@ export default function Dashboard() {
       .filter((section) => section.rows.length);
   }, [data, laneFilter, sourceFilter, search]);
 
+  const filteredAppliedByLane = useMemo(() => {
+    if (!data) return [];
+    return data.applied_by_lane
+      .map((section) => ({ ...section, rows: section.rows.filter(matchesFilters) }))
+      .filter((section) => section.rows.length);
+  }, [data, laneFilter, sourceFilter, search]);
+
   const sources = useMemo(() => {
     if (!data) return [];
-    return [...new Set(data.pending.map((r) => r.source).filter(Boolean))];
+    return [...new Set([...data.pending, ...data.applied].map((r) => r.source).filter(Boolean))];
   }, [data]);
 
   function toggleSelect(key, checked) {
@@ -496,19 +503,39 @@ export default function Dashboard() {
       )}
 
       {tab === "applied" && (
-        data.applied.length ? (
-          data.applied_by_lane.map((section) => section.rows.length > 0 && (
-            <LaneSection key={section.slug} section={section} tone="pine">
-              <div className="posting-list">
-                {section.rows.map((row) => (
-                  <PostingCard key={row.posting_key} row={row} applied open={false} onToggleOpen={() => {}} />
-                ))}
-              </div>
-            </LaneSection>
-          ))
-        ) : (
-          <div className="empty-state">No applications yet.</div>
-        )
+        <>
+          {data.applied.length > 0 && (
+            <div className="filter-bar">
+              <button type="button" className={`filter-pill${laneFilter === "all" ? " active" : ""}`} onClick={() => setLaneFilter("all")}>All lanes</button>
+              {data.lane_names.map((n) => (
+                <button key={n} type="button" className={`filter-pill${laneFilter === n ? " active" : ""}`} onClick={() => setLaneFilter(n)}>
+                  {data.lane_labels[n] || n.replace(/_/g, " ")}
+                </button>
+              ))}
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                <option value="all">All sources</option>
+                {sources.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
+              </select>
+              <input placeholder="Search company, role, location" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+          )}
+
+          {filteredAppliedByLane.length ? (
+            filteredAppliedByLane.map((section) => (
+              <LaneSection key={section.slug} section={section} tone="pine">
+                <div className="posting-list">
+                  {section.rows.map((row) => (
+                    <PostingCard key={row.posting_key} row={row} applied open={false} onToggleOpen={() => {}} />
+                  ))}
+                </div>
+              </LaneSection>
+            ))
+          ) : (
+            <div className="empty-state">
+              {data.applied.length ? "No applications match these filters." : "No applications yet."}
+            </div>
+          )}
+        </>
       )}
 
       {tab === "runs" && (
