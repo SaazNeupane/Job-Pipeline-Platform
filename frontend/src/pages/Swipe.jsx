@@ -63,75 +63,9 @@ function SwipeCardPeek({ row, laneLabels }) {
 
 const EXIT_ANIMATION_MS = 260;
 
-function AddManualPosting({ laneNames, laneLabels, onAdded }) {
-  const [open, setOpen] = useState(false);
-  const [lane, setLane] = useState(laneNames[0] || "");
-  const [text, setText] = useState("");
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      const result = await api.addManualPosting(lane, text, url);
-      setText("");
-      setUrl("");
-      setOpen(false);
-      onAdded(result.row);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!laneNames.length) return null;
-
-  return (
-    <details className="advanced manual-posting" open={open} onToggle={(e) => setOpen(e.target.open)}>
-      <summary>Found one yourself? Paste a posting in</summary>
-      <form onSubmit={submit}>
-        <p className="hint">
-          Paste the full text of a posting from anywhere (Indeed, LinkedIn, a company site) and it
-          goes straight to tailoring a resume and cover letter for it, same as swiping right.
-        </p>
-        {error && <p className="error-banner">{error}</p>}
-        <label>
-          Job type
-          <select value={lane} onChange={(e) => setLane(e.target.value)}>
-            {laneNames.map((name) => (
-              <option key={name} value={name}>{laneLabels[name] || name.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Posting link (optional)
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
-        </label>
-        <label>
-          Job posting text
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
-            placeholder="Paste the whole posting here -- title, company, location, description"
-          />
-        </label>
-        <button type="submit" className="primary" disabled={busy || !text.trim()}>
-          {busy ? "Reading it…" : "Add it"}
-        </button>
-      </form>
-    </details>
-  );
-}
-
 export default function Swipe() {
   const { data, error, errorCode, setError, setData } = useApiData(() => api.swipeQueue(), []);
   const queue = data?.queue;
-  const laneNames = data?.lane_names || [];
   const laneLabels = data?.lane_labels || {};
   const [busy, setBusy] = useState(false);
   const [exiting, setExiting] = useState(null); // null | "like" | "reject"
@@ -206,8 +140,6 @@ export default function Swipe() {
           {" "}Check your <Link to="/dashboard">dashboard</Link> in a moment.
         </div>
       )}
-
-      <AddManualPosting laneNames={laneNames} laneLabels={laneLabels} onAdded={setLastLiked} />
 
       <div className="swipe-stage">
         {current ? (
