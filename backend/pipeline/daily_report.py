@@ -31,6 +31,7 @@ they have (an empty list is fine)."""
 
 from __future__ import annotations
 
+import os
 from datetime import date
 
 from pipeline.config import load_profile
@@ -70,6 +71,10 @@ def build_daily_summary(
     }
 
 
+def _site_url() -> str:
+    return os.environ.get("BACKEND_PUBLIC_URL", "http://localhost:8000")
+
+
 def _format_email_body(summary: dict) -> str:
     lines = [
         f"Job pipeline run for {summary['date']}",
@@ -92,6 +97,8 @@ def _format_email_body(summary: dict) -> str:
     else:
         lines.append("")
         lines.append("No errors.")
+    lines.append("")
+    lines.append(f"Swipe and review: {_site_url()}/dashboard")
     return "\n".join(lines)
 
 
@@ -159,6 +166,11 @@ def _format_email_html(summary: dict) -> str:
     <tr>{cold_email_stats}</tr>
   </table>
   {errors_html}
+  <a href="{_site_url()}/dashboard"
+     style="display:block;text-align:center;margin-top:20px;padding:12px;background:#1f7a5c;
+            color:#ffffff;font-weight:700;font-size:13px;text-decoration:none;border-radius:9px;">
+    Swipe and review
+  </a>
 </div>"""
 
 
