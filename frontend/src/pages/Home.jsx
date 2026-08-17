@@ -27,7 +27,7 @@ const SETUP_STEPS = [
   {
     n: "02",
     title: "Job types (lanes)",
-    body: "A lane is a category of job to search for, with its own keywords, filters, and tailored resume. Pick ready-made presets, build your own, or both. A preset doesn't have to be all-or-nothing either: uncheck any keyword you don't want (say, just \"baker\" instead of every food-service role) or add your own on top. Each lane can target a different country, remote/onsite preference, salary range, and set of sources.",
+    body: "A lane is a category of job to search for, with its own keywords, filters, and tailored resume. Pick ready-made presets, build your own, or both. Presets aren't all-or-nothing: drop any keyword you don't want, like \"baker\" instead of every food-service role, or add your own. Each lane can target a different country, remote/onsite preference, salary range, and set of sources.",
   },
   {
     n: "03",

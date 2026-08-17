@@ -169,8 +169,8 @@ export default function Lanes() {
             <details className="advanced" key={name}>
               <summary>Customize keywords for {meta.presets[name].label}</summary>
               <p className="hint">
-                This preset searches every keyword checked below. Only want part of it -- say,
-                just "baker" instead of every food-service role? Uncheck the rest.
+                This preset searches every keyword lit up below. Want just part of it, like
+                "baker" instead of every food-service role? Tap the rest off.
               </p>
               <div className="preset-keyword-head">
                 <span className="hint">{kept} of {total} selected</span>
@@ -178,12 +178,19 @@ export default function Lanes() {
                 <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, false)}>Select none</button>
               </div>
               <div className="chip-input">
-                {meta.presets[name].keywords.map((kw) => (
-                  <label key={kw} className="checkbox-row">
-                    <input type="checkbox" checked={!excluded.has(kw)} onChange={() => togglePresetKeyword(name, kw)} />
-                    {kw}
-                  </label>
-                ))}
+                {meta.presets[name].keywords.map((kw) => {
+                  const on = !excluded.has(kw);
+                  return (
+                    <button
+                      type="button" key={kw}
+                      className={`keyword-chip${on ? " on" : ""}`}
+                      aria-pressed={on}
+                      onClick={() => togglePresetKeyword(name, kw)}
+                    >
+                      {on ? "✓ " : ""}{kw}
+                    </button>
+                  );
+                })}
               </div>
               <label>
                 Add your own, comma-separated (optional)
