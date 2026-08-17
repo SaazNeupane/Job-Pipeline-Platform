@@ -47,7 +47,8 @@ export default function Lanes() {
   const navigate = useNavigate();
 
   const [selectedPresets, setSelectedPresets] = useState(new Set(draft.lane_names || []));
-  const [presetOverrides, setPresetOverrides] = useState({});
+  const [presetExcluded, setPresetExcluded] = useState({}); // preset name -> Set of unchecked default keywords
+  const [presetExtra, setPresetExtra] = useState({}); // preset name -> "add your own" text
   const [customLanes, setCustomLanes] = useState([]);
   const [greenhouseBoards, setGreenhouseBoards] = useState((draft.greenhouse_boards || []).join(", "));
   const [leverCompanies, setLeverCompanies] = useState((draft.lever_companies || []).join(", "));
@@ -70,12 +71,40 @@ export default function Lanes() {
     setCustomLanes((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
+  function togglePresetKeyword(name, keyword) {
+    setPresetExcluded((prev) => {
+      const next = new Set(prev[name] || []);
+      next.has(keyword) ? next.delete(keyword) : next.add(keyword);
+      return { ...prev, [name]: next };
+    });
+  }
+
+  function setAllPresetKeywords(name, checked) {
+    setPresetExcluded((prev) => ({ ...prev, [name]: checked ? new Set() : new Set(meta.presets[name].keywords) }));
+  }
+
+  function presetKeywords(name) {
+    const defaults = meta.presets[name].keywords;
+    const excluded = presetExcluded[name] || new Set();
+    return [...defaults.filter((k) => !excluded.has(k)), ...csv(presetExtra[name] || "")];
+  }
+
   async function submit(e) {
     e.preventDefault();
     setError("");
+
+    for (const name of selectedPresets) {
+      if (!presetKeywords(name).length) {
+        setError(`${meta.presets[name].label}: uncheck all the defaults and it has nothing left to search for -- keep at least one, or add your own.`);
+        return;
+      }
+    }
+
     const presets = [...selectedPresets].map((name) => {
-      const override = (presetOverrides[name] || "").trim();
-      return override ? { name, keywords: csv(override) } : { name };
+      const excluded = presetExcluded[name] || new Set();
+      const extra = csv(presetExtra[name] || "");
+      const changed = excluded.size > 0 || extra.length > 0;
+      return changed ? { name, keywords: presetKeywords(name) } : { name };
     });
     const custom_lanes = customLanes
       .filter((c) => c.label.trim() || c.keywords.trim())
@@ -132,19 +161,41 @@ export default function Lanes() {
             </label>
           ))}
         </div>
-        {[...selectedPresets].map((name) => (
-          <details className="advanced" key={name}>
-            <summary>Advanced: customize keywords for {meta.presets[name].label}</summary>
-            <label>
-              Comma-separated, leave blank to use the defaults above
-              <input
-                value={presetOverrides[name] || ""}
-                onChange={(e) => setPresetOverrides({ ...presetOverrides, [name]: e.target.value })}
-                placeholder={meta.presets[name].keywords.join(", ")}
-              />
-            </label>
-          </details>
-        ))}
+        {[...selectedPresets].map((name) => {
+          const excluded = presetExcluded[name] || new Set();
+          const total = meta.presets[name].keywords.length;
+          const kept = total - excluded.size;
+          return (
+            <details className="advanced" key={name}>
+              <summary>Customize keywords for {meta.presets[name].label}</summary>
+              <p className="hint">
+                This preset searches every keyword checked below. Only want part of it -- say,
+                just "baker" instead of every food-service role? Uncheck the rest.
+              </p>
+              <div className="preset-keyword-head">
+                <span className="hint">{kept} of {total} selected</span>
+                <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, true)}>Select all</button>
+                <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, false)}>Select none</button>
+              </div>
+              <div className="chip-input">
+                {meta.presets[name].keywords.map((kw) => (
+                  <label key={kw} className="checkbox-row">
+                    <input type="checkbox" checked={!excluded.has(kw)} onChange={() => togglePresetKeyword(name, kw)} />
+                    {kw}
+                  </label>
+                ))}
+              </div>
+              <label>
+                Add your own, comma-separated (optional)
+                <input
+                  value={presetExtra[name] || ""}
+                  onChange={(e) => setPresetExtra({ ...presetExtra, [name]: e.target.value })}
+                  placeholder="e.g. pastry chef, line cook"
+                />
+              </label>
+            </details>
+          );
+        })}
 
         <fieldset>
           <legend>Your own job type (optional)</legend>

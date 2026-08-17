@@ -636,7 +636,10 @@ legend {
 .lane-card-title { font-weight: 700; }
 .lane-card-hint { color: var(--ink-faint); font-size: 0.84rem; margin-top: 0.15rem; line-height: 1.35; }
 
-.chip-input { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.preset-keyword-head { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 0.6rem; }
+.preset-keyword-head .ghost { padding: 0.2rem 0.4rem; font-size: 0.8rem; }
+
+.chip-input { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
 .chip {
   display: inline-flex; align-items: center; gap: 0.35rem;
   background: var(--surface-alt); border: 1px solid var(--wire);
