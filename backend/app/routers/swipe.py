@@ -37,16 +37,31 @@ def queue(user: User = Depends(get_current_user)):
 
 
 def _generate_in_background(user_id: str, match: dict) -> None:
+    import logging
+
     from app.db import SessionLocal
     from pipeline import config as pipeline_config
+    from pipeline.postings_store import update_posting
 
-    db = SessionLocal()
-    pipeline_config.set_session(db)
     try:
-        generate_liked_materials(user_id, match)
-    finally:
-        pipeline_config.set_session(None)
-        db.close()
+        db = SessionLocal()
+        pipeline_config.set_session(db)
+        try:
+            generate_liked_materials(user_id, match)
+        finally:
+            pipeline_config.set_session(None)
+            db.close()
+    except Exception as exc:  # noqa: BLE001 — background thread has no caller to raise to; a
+        # session-setup/teardown failure here (e.g. a dropped DB connection) previously
+        # escaped generate_liked_materials()'s own try/except entirely and left the row
+        # stuck on reason_held="generating" forever, since nothing ever called .result()
+        # on the submitted future to surface it. Must still mark the row failed so a user
+        # sees "generation_failed" (and can retry) instead of a silent stall.
+        logging.exception("generate_liked_materials background task failed for %s", match.get("posting_key"))
+        try:
+            update_posting(user_id, match["posting_key"], {"reason_held": f"generation_failed: {exc}"})
+        except Exception:
+            logging.exception("failed to record generation_failed for %s", match.get("posting_key"))
 
 
 @router.post("/{posting_key:path}/like")
