@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.models import User
@@ -11,7 +12,7 @@ from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_fir
 from pipeline.config import load_profile
 from pipeline.google_auth import BACKGROUND_EXECUTOR
 from pipeline.postings_store import get_postings
-from pipeline.swipe_actions import generate_liked_materials, queue_like, reject_posting
+from pipeline.swipe_actions import add_manual_posting, generate_liked_materials, queue_like, reject_posting
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
 
@@ -62,6 +63,22 @@ def _generate_in_background(user_id: str, match: dict) -> None:
             update_posting(user_id, match["posting_key"], {"reason_held": f"generation_failed: {exc}"})
         except Exception:
             logging.exception("failed to record generation_failed for %s", match.get("posting_key"))
+
+
+class ManualPostingRequest(BaseModel):
+    lane: str
+    text: str
+    url: str = ""
+
+
+@router.post("/manual")
+def add_manual(body: ManualPostingRequest, user: User = Depends(get_current_user)):
+    try:
+        match = add_manual_posting(user.id, body.lane, body.text, body.url)
+    except SystemExit as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    BACKGROUND_EXECUTOR.submit(_generate_in_background, user.id, match)
+    return {"ok": True, "row": {"company": match.get("company", ""), "role": match.get("role", "")}}
 
 
 @router.post("/{posting_key:path}/like")

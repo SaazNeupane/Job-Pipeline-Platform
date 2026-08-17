@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .env
 logs/
+backend/output/
 node_modules/
 dist/
 *.egg-info/

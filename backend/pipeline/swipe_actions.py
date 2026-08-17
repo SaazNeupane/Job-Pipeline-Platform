@@ -19,16 +19,18 @@ module) has been removed entirely, not just disconnected — see CLAUDE.md's
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 
-from pipeline.config import load_profile
+from pipeline.config import load_profile, load_secrets
 from pipeline.cover_letter import get_cover_letter
 from pipeline.drive_storage import upload_resume
-from pipeline.filter import extract_required_years
-from pipeline.postings_store import create_posting, get_posting, transition_posting, update_posting
+from pipeline.filter import extract_required_years, posting_fingerprint
+from pipeline.postings_store import create_posting, get_existing_fingerprints, get_posting, transition_posting, update_posting
 from pipeline.search import Posting
 from pipeline.tailor_resume import render_resume_pdf, reword_bullets_with_llm, tailor_resume
+from pipeline.writing_style import DEFAULT_MODEL_FALLBACKS, generate_with_gemini
 
 
 def queue_for_swipe(user: str, lane, matches: list[tuple]) -> int:
@@ -83,6 +85,77 @@ def _posting_from_row(row: dict) -> Posting:
         salary_min=_to_float(row.get("salary_min", "")),
         salary_max=_to_float(row.get("salary_max", "")),
     )
+
+
+_MANUAL_PARSE_SYSTEM_PROMPT = """\
+You extract structured fields from a job posting a user pasted in from somewhere else \
+(e.g. Indeed, LinkedIn, a company careers page). Respond with ONLY a JSON object with \
+exactly these keys: "title", "company", "location", "description" (all strings). No \
+markdown, no commentary, no extra keys. Pull the plain-text job description into \
+"description" as-is, trimmed of obvious page chrome (nav links, "Apply now" buttons, \
+cookie notices) but never summarized or reworded. If a field genuinely isn't present in \
+the text, use an empty string for it — never invent a company, title, or location that \
+isn't actually there."""
+
+
+def _parse_pasted_posting(api_key: str, raw_text: str) -> dict:
+    raw = generate_with_gemini(
+        api_key, DEFAULT_MODEL_FALLBACKS, _MANUAL_PARSE_SYSTEM_PROMPT, raw_text, max_output_tokens=2048,
+    )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Couldn't read that as a job posting: {exc}") from exc
+    return {key: str(parsed.get(key) or "") for key in ("title", "company", "location", "description")}
+
+
+def add_manual_posting(user: str, lane_name: str, raw_text: str, url: str = "") -> dict:
+    """Lets a posting found somewhere this pipeline doesn't search (Indeed, LinkedIn, a
+    direct company site) go through the exact same tailor/cover-letter/Drive-upload chain
+    as one it found itself — skips the swipe queue entirely and lands straight in
+    pending_approval, same end state a right-swipe reaches, since pasting it in already
+    means the user decided they want it. Gemini only ever extracts fields already present
+    in the pasted text (see _MANUAL_PARSE_SYSTEM_PROMPT) — it never invents a posting."""
+    if not raw_text.strip():
+        raise SystemExit("Paste the job posting text first.")
+
+    profile = load_profile(user)
+    lane = next((l for l in profile.lanes if l.name == lane_name), None)
+    if lane is None:
+        raise SystemExit(f"No lane named {lane_name!r} in your profile.")
+
+    secrets = load_secrets(user)
+    api_key = secrets.get("GEMINI_API_KEY")
+    if not api_key:
+        raise SystemExit("Add a Gemini API key in setup before adding a posting this way.")
+
+    parsed = _parse_pasted_posting(api_key, raw_text)
+    if not parsed["title"] and not parsed["company"]:
+        raise SystemExit("Couldn't find a job title or company in that text — paste the full posting.")
+
+    fingerprint = posting_fingerprint("manual", parsed["company"], parsed["title"], parsed["location"])
+    if fingerprint in get_existing_fingerprints(user):
+        raise SystemExit("You've already added this posting.")
+
+    posting_key = f"manual:{uuid.uuid4().hex[:12]}"
+    match = create_posting(user, "pending", {
+        "posting_key": posting_key,
+        "date": date.today().isoformat(),
+        "lane": lane.name,
+        "company": parsed["company"],
+        "role": parsed["title"],
+        "source": "manual",
+        "job_id": posting_key.split(":", 1)[1],
+        "location": parsed["location"],
+        "application_url": url,
+        "description_text": parsed["description"],
+        "matched_terms": "",
+        "reason_held": "generating",
+        "resume_version": lane.resume,
+        "resume_link": "",
+        "cover_letter": "",
+    })
+    return match
 
 
 def queue_like(user: str, posting_key: str) -> dict:
