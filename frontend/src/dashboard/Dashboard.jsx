@@ -126,16 +126,27 @@ function AddManualPosting({ laneNames, laneLabels, onAdded }) {
     }
   }
 
-  if (!laneNames.length) return null;
+  if (!laneNames.length) {
+    return (
+      <details className="advanced manual-posting">
+        <summary>Found one yourself? Paste a posting in</summary>
+        <p className="hint">
+          This needs at least one job type set up first, since tailoring a resume for a
+          posting means pulling from one of your lane's resumes. <Link to="/setup/lanes">Add a job type</Link>,
+          then come back here.
+        </p>
+      </details>
+    );
+  }
 
   return (
     <details className="advanced manual-posting" open={open} onToggle={(e) => setOpen(e.target.open)}>
       <summary>Found one yourself? Paste a posting in</summary>
       <form onSubmit={submit}>
         <p className="hint">
-          Paste the full text of a posting from anywhere (Indeed, LinkedIn, a company site) and it
-          goes straight to tailoring a resume and cover letter for it, same as a right-swipe would --
-          no need to send it through the swipe queue first.
+          Paste the full text of a posting from anywhere, Indeed, LinkedIn, a company site,
+          and it goes straight to tailoring a resume and cover letter for it, same as a
+          right-swipe would. No need to send it through the swipe queue first.
         </p>
         {error && <p className="error-banner">{error}</p>}
         <label>
@@ -146,6 +157,12 @@ function AddManualPosting({ laneNames, laneLabels, onAdded }) {
             ))}
           </select>
         </label>
+        {laneNames.length > 1 && (
+          <p className="hint">
+            Nothing here quite fits? Pick whichever's closest, it tailors against that lane's resume.
+            {" "}<Link to="/setup/lanes">Add a new job type</Link> if you'd rather build one for this instead.
+          </p>
+        )}
         <label>
           Posting link (optional)
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
