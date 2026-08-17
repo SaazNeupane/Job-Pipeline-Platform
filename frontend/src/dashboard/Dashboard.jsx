@@ -525,7 +525,11 @@ export default function Dashboard() {
               <LaneSection key={section.slug} section={section} tone="pine">
                 <div className="posting-list">
                   {section.rows.map((row) => (
-                    <PostingCard key={row.posting_key} row={row} applied open={false} onToggleOpen={() => {}} />
+                    <PostingCard
+                      key={row.posting_key} row={row} applied
+                      open={openDetail === row.posting_key}
+                      onToggleOpen={() => setOpenDetail(openDetail === row.posting_key ? null : row.posting_key)}
+                    />
                   ))}
                 </div>
               </LaneSection>
