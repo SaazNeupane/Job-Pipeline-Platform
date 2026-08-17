@@ -761,12 +761,19 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
    pieces got. Only one section renders at a time now; this is the primary nav between
    them, so it's an underline style, deliberately distinct from .filter-pill (a filter
    *within* a section) so the two don't read as the same kind of control. */
-.section-tabs { display: flex; gap: 1.75rem; border-bottom: 1px solid var(--wire); margin-bottom: 2.5rem; }
+/* Four labels ("Overview", "Needs review (N)", "Applied (N)", "Runs") don't fit a phone
+   width without wrapping to a second line, which reads badly for primary nav -- scrolls
+   horizontally instead, same pattern as a native app's tab strip. */
+.section-tabs {
+  display: flex; gap: 1.75rem; border-bottom: 1px solid var(--wire); margin-bottom: 2.5rem;
+  overflow-x: auto; scrollbar-width: none;
+}
+.section-tabs::-webkit-scrollbar { display: none; }
 .section-tab {
   background: none; border: none; border-radius: 0; padding: 0 0 0.9rem;
   font-family: var(--font-mono); font-size: 0.86rem; font-weight: 600; letter-spacing: 0.02em;
   color: var(--ink-faint); cursor: pointer; position: relative; top: 1px;
-  border-bottom: 2px solid transparent;
+  border-bottom: 2px solid transparent; flex-shrink: 0;
 }
 .section-tab:hover { opacity: 1; color: var(--ink-soft); }
 .section-tab.active { color: var(--ink); border-bottom-color: var(--redline); }
