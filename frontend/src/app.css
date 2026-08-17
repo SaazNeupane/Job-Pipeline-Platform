@@ -659,23 +659,33 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
   background: var(--surface);
 }
 
-/* Dashboard ------------------------------------------------------------------ */
-.dash-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-.dash-head h1 { margin-bottom: 0.2rem; }
+/* Dashboard ------------------------------------------------------------------
+   Spacing pass: every block below used to sit almost flush against the next
+   (dash-head -> run-bar -> stat-strip -> filters -> list), each its own
+   bordered box, which read as dense/"in your face" at a glance even though
+   no individual piece was wrong on its own. Margins between major blocks are
+   now a consistent, generous rhythm (~2.5-3rem) instead of ~1-1.5rem, and the
+   boxed-in pieces (stat-strip, run-bar) got lighter borders/backgrounds and
+   more internal padding so they read as calm dividers, not competing panels. */
+.dash-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 2.5rem; }
+.dash-head h1 { margin-bottom: 0.3rem; }
 .dash-head .lede { margin-bottom: 0; }
 .dash-head-links { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
 
 .stat-strip {
   display: flex;
-  background: var(--surface);
-  border: 1px solid var(--wire);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  background: none;
+  border: none;
+  border-top: 1px solid var(--wire);
+  border-bottom: 1px solid var(--wire);
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
-  margin-bottom: 2rem;
+  margin-bottom: 3rem;
   flex-wrap: wrap;
 }
-.stat-item { padding: 1rem 1.5rem; border-right: 1px solid var(--wire); display: flex; align-items: center; gap: 0.9rem; }
+.stat-item { padding: 1.4rem 1.75rem; border-right: 1px solid var(--wire); display: flex; align-items: center; gap: 1rem; }
+.stat-item:first-child { padding-left: 0; }
 .stat-item:last-child { border-right: none; }
 .stat-item-link { color: inherit; text-decoration: none; transition: background 0.12s ease; }
 .stat-item-link:hover { background: var(--surface-hover, rgba(0, 0, 0, 0.03)); }
@@ -691,8 +701,8 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .stat-num.pine { color: var(--approved); }
 .run-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
-  background: var(--surface-alt); border: 1px solid var(--wire); border-radius: var(--radius-sm);
-  padding: 0.85rem 1.2rem; margin-bottom: 1.5rem;
+  background: none; border: none; border-radius: 0;
+  padding: 0 0 2rem; margin-bottom: 2.5rem; border-bottom: 1px solid var(--wire);
 }
 .run-bar > div:first-child { line-height: 1.4; }
 .run-bar form { flex-direction: row; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
@@ -745,7 +755,23 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .collapsible-head:hover { background: var(--surface-hover, rgba(0, 0, 0, 0.035)); }
 .collapsible-head h2 { margin: 0; }
 
-.filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1.5rem; }
+/* Dashboard section tabs -- the dashboard used to render everything (run control,
+   stats, needs-review list, applied list, recent runs) in one long stacked page, which
+   was the real source of "too much at once" regardless of how much spacing individual
+   pieces got. Only one section renders at a time now; this is the primary nav between
+   them, so it's an underline style, deliberately distinct from .filter-pill (a filter
+   *within* a section) so the two don't read as the same kind of control. */
+.section-tabs { display: flex; gap: 1.75rem; border-bottom: 1px solid var(--wire); margin-bottom: 2.5rem; }
+.section-tab {
+  background: none; border: none; border-radius: 0; padding: 0 0 0.9rem;
+  font-family: var(--font-mono); font-size: 0.86rem; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--ink-faint); cursor: pointer; position: relative; top: 1px;
+  border-bottom: 2px solid transparent;
+}
+.section-tab:hover { opacity: 1; color: var(--ink-soft); }
+.section-tab.active { color: var(--ink); border-bottom-color: var(--redline); }
+
+.filter-bar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-bottom: 2rem; }
 .filter-bar select { width: auto; padding: 0.42rem 0.65rem; font-size: 0.84rem; }
 .filter-bar input { max-width: 240px; padding: 0.42rem 0.7rem; font-size: 0.84rem; }
 .filter-pill {
@@ -772,10 +798,10 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .confirm-dialog p { margin: 0 0 1.2rem; color: var(--ink-soft); }
 .confirm-dialog-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
 
-.posting-list { display: flex; flex-direction: column; gap: 0.65rem; margin-bottom: 1rem; }
+.posting-list { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem; }
 .posting-card {
-  background: var(--surface); border: 1px solid var(--wire); border-left: 3px solid var(--wire-strong);
-  border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem 1.2rem;
+  background: var(--surface); border: 1px solid var(--wire); border-left: 2px solid var(--wire-strong);
+  border-radius: var(--radius); box-shadow: none; padding: 1.3rem 1.5rem;
   transition: box-shadow 0.15s ease, transform 0.1s ease;
 }
 /* Left-edge accent stands in for the old reason-held badge -- amber means
@@ -792,8 +818,13 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .posting-company { font-weight: 700; font-size: 1rem; }
 .posting-role { color: var(--ink-soft); font-size: 0.9rem; margin-top: 0.1rem; }
 .posting-meta { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; align-items: center; }
-.posting-actions { display: flex; gap: 0.4rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+/* Details is a lighter, separate concern (view/copy something) from the actual
+   pending/applied decision -- pushed left via margin-right:auto so Dismiss/Mark
+   applied read as one grouped pair on the right, not three same-weight buttons
+   in a row. */
+.posting-actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
 .posting-actions button { padding: 0.45rem 0.8rem; font-size: 0.82rem; white-space: nowrap; }
+.posting-actions .ghost { margin-right: auto; }
 
 .detail-panel { background: var(--surface-alt); border: 1px solid var(--wire); border-radius: var(--radius-sm); padding: 1rem; margin-top: 0.9rem; }
 .detail-panel-links { display: flex; gap: 0.6rem; margin-bottom: 0.8rem; flex-wrap: wrap; }

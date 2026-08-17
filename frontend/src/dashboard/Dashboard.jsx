@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
-import Collapsible from "../components/Collapsible.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
@@ -71,12 +70,12 @@ function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRe
         </div>
         <div className="posting-actions">
           {(row.application_url || row.resume_link || row.cover_letter) && (
-            <button type="button" className="secondary" onClick={onToggleOpen} disabled={!!busy}>{open ? "Hide" : "Details"}</button>
+            <button type="button" className="ghost" onClick={onToggleOpen} disabled={!!busy}>{open ? "Hide" : "Details"}</button>
           )}
           {!applied && (
             <>
-              <button type="button" onClick={onPromote} disabled={!!busy || generating} title={generating ? "Still tailoring your resume and cover letter" : undefined}>{busy === "promote" ? "Working…" : "Mark applied"}</button>
               <button type="button" className="danger" onClick={onDismiss} disabled={!!busy}>{busy === "dismiss" ? "Working…" : "Dismiss"}</button>
+              <button type="button" className="primary" onClick={onPromote} disabled={!!busy || generating} title={generating ? "Still tailoring your resume and cover letter" : undefined}>{busy === "promote" ? "Working…" : "Mark applied"}</button>
             </>
           )}
         </div>
@@ -216,6 +215,7 @@ export default function Dashboard() {
   const [runLane, setRunLane] = useState("all");
   const [runMaxAgeDays, setRunMaxAgeDays] = useState("");
   const [runColdEmailOnly, setRunColdEmailOnly] = useState(false);
+  const [tab, setTab] = useState("review"); // overview | review | applied | runs
 
   async function runNow() {
     setRunState("pending");
@@ -364,137 +364,155 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="run-bar">
-        <div>
-          {data.apply_daily_cap != null && (
-            <p className="lede" style={{ marginBottom: runState === "started" ? "0.3rem" : 0 }}>
-              Up to {data.apply_daily_cap} new postings per lane get queued for you to swipe on each day. Nothing gets applied to without you.
-            </p>
-          )}
-          {runState === "started" && <p className="hint" style={{ margin: 0 }}>Run started. Check back in a few minutes.</p>}
-        </div>
-        <button type="button" className="primary" onClick={runNow} disabled={runState === "pending" || runState === "started"}>
-          {runState === "pending" ? "Starting…" : runState === "started" ? "Run started" : "Run now"}
+      <div className="section-tabs">
+        <button type="button" className={`section-tab${tab === "overview" ? " active" : ""}`} onClick={() => setTab("overview")}>Overview</button>
+        <button type="button" className={`section-tab${tab === "review" ? " active" : ""}`} onClick={() => setTab("review")}>
+          Needs review{data.pending.length ? ` (${data.pending.length})` : ""}
         </button>
+        <button type="button" className={`section-tab${tab === "applied" ? " active" : ""}`} onClick={() => setTab("applied")}>
+          Applied{data.applied.length ? ` (${data.applied.length})` : ""}
+        </button>
+        <button type="button" className={`section-tab${tab === "runs" ? " active" : ""}`} onClick={() => setTab("runs")}>Runs</button>
+      </div>
 
-        <details className="advanced" style={{ flexBasis: "100%" }}>
-          <summary>Advanced: run just one lane, widen the date window, or cold email only</summary>
-          <div className="run-override">
-            <label>
-              Lane
-              <select value={runLane} onChange={(e) => setRunLane(e.target.value)} disabled={runColdEmailOnly}>
-                <option value="all">All lanes</option>
-                {data.lane_names.map((n) => (
-                  <option key={n} value={n}>{data.lane_labels[n] || n.replace(/_/g, " ")}</option>
-                ))}
-              </select>
-            </label>
-            <div className="run-override-days">
-              <label>
-                Recency window
-                <input
-                  type="number" min="1" placeholder="default"
-                  value={runMaxAgeDays} onChange={(e) => setRunMaxAgeDays(e.target.value)}
-                />
-              </label>
-              <span>days</span>
+      {tab === "overview" && (
+        <>
+          <div className="run-bar">
+            <div>
+              {data.apply_daily_cap != null && (
+                <p className="lede" style={{ marginBottom: runState === "started" ? "0.3rem" : 0 }}>
+                  Up to {data.apply_daily_cap} new postings per lane get queued for you to swipe on each day. Nothing gets applied to without you.
+                </p>
+              )}
+              {runState === "started" && <p className="hint" style={{ margin: 0 }}>Run started. Check back in a few minutes.</p>}
             </div>
-            <label className="checkbox-row">
-              <input
-                type="checkbox" checked={runColdEmailOnly}
-                onChange={(e) => setRunColdEmailOnly(e.target.checked)}
-              />
-              Cold email only, skip job search
-            </label>
-            <p className="hint">
-              A scoped run like this doesn't count against today's one-run limit. Only a full
-              default run does.
-            </p>
-          </div>
-        </details>
-      </div>
-
-      <div className="stat-strip">
-        <StatItem icon={<InboxIcon />} label="Needs review" value={data.pending.length} tone="signal" />
-        <StatItem icon={<CheckCircleIcon />} label="Applied" value={data.applied.length} tone="pine" />
-        <StatItem icon={<MailIcon />} label="Cold emails" value={data.cold_emails.length} to="/cold-email" />
-        <StatItem icon={<RunsIcon />} label="Runs logged" value={data.summary.length} />
-      </div>
-
-      <AddManualPosting laneNames={data.lane_names} laneLabels={data.lane_labels} onAdded={load} />
-
-      <h2 style={{ marginTop: 0 }}>Needs your review</h2>
-
-      {data.pending.length > 0 && (
-        <div className="filter-bar">
-          <button type="button" className={`filter-pill${laneFilter === "all" ? " active" : ""}`} onClick={() => setLaneFilter("all")}>All lanes</button>
-          {data.lane_names.map((n) => (
-            <button key={n} type="button" className={`filter-pill${laneFilter === n ? " active" : ""}`} onClick={() => setLaneFilter(n)}>
-              {data.lane_labels[n] || n.replace(/_/g, " ")}
+            <button type="button" className="primary" onClick={runNow} disabled={runState === "pending" || runState === "started"}>
+              {runState === "pending" ? "Starting…" : runState === "started" ? "Run started" : "Run now"}
             </button>
-          ))}
-          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
-            <option value="all">All sources</option>
-            {sources.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
-          </select>
-          <input placeholder="Search company, role, location" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-      )}
 
-      {selected.size > 0 && (
-        <div className="bulk-bar">
-          <span>{selected.size} selected</span>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button type="button" className="secondary" onClick={() => setSelected(new Set())} disabled={bulkBusy}>Clear</button>
-            <button type="button" className="danger" onClick={() => setConfirmTarget({ type: "bulk" })} disabled={bulkBusy}>{bulkBusy ? "Dismissing…" : "Dismiss selected"}</button>
+            <details className="advanced" style={{ flexBasis: "100%" }}>
+              <summary>Advanced: run just one lane, widen the date window, or cold email only</summary>
+              <div className="run-override">
+                <label>
+                  Lane
+                  <select value={runLane} onChange={(e) => setRunLane(e.target.value)} disabled={runColdEmailOnly}>
+                    <option value="all">All lanes</option>
+                    {data.lane_names.map((n) => (
+                      <option key={n} value={n}>{data.lane_labels[n] || n.replace(/_/g, " ")}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="run-override-days">
+                  <label>
+                    Recency window
+                    <input
+                      type="number" min="1" placeholder="default"
+                      value={runMaxAgeDays} onChange={(e) => setRunMaxAgeDays(e.target.value)}
+                    />
+                  </label>
+                  <span>days</span>
+                </div>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox" checked={runColdEmailOnly}
+                    onChange={(e) => setRunColdEmailOnly(e.target.checked)}
+                  />
+                  Cold email only, skip job search
+                </label>
+                <p className="hint">
+                  A scoped run like this doesn't count against today's one-run limit. Only a full
+                  default run does.
+                </p>
+              </div>
+            </details>
           </div>
-        </div>
+
+          <div className="stat-strip">
+            <StatItem icon={<InboxIcon />} label="Needs review" value={data.pending.length} tone="signal" />
+            <StatItem icon={<CheckCircleIcon />} label="Applied" value={data.applied.length} tone="pine" />
+            <StatItem icon={<MailIcon />} label="Cold emails" value={data.cold_emails.length} to="/cold-email" />
+            <StatItem icon={<RunsIcon />} label="Runs logged" value={data.summary.length} />
+          </div>
+
+          <AddManualPosting laneNames={data.lane_names} laneLabels={data.lane_labels} onAdded={load} />
+        </>
       )}
 
-      {filteredPendingByLane.length ? (
-        filteredPendingByLane.map((section) => (
-          <LaneSection key={section.slug} section={section}>
-            <div className="posting-list">
-              {section.rows.map((row) => (
-                <PostingCard
-                  key={row.posting_key} row={row}
-                  selected={selected.has(row.posting_key)}
-                  onToggleSelect={(checked) => toggleSelect(row.posting_key, checked)}
-                  onPromote={() => promote(row.posting_key)}
-                  onDismiss={() => setConfirmTarget({ type: "single", key: row.posting_key })}
-                  onRetry={() => retry(row.posting_key)}
-                  open={openDetail === row.posting_key}
-                  onToggleOpen={() => setOpenDetail(openDetail === row.posting_key ? null : row.posting_key)}
-                  busy={busyRows[row.posting_key]}
-                />
+      {tab === "review" && (
+        <>
+          {data.pending.length > 0 && (
+            <div className="filter-bar">
+              <button type="button" className={`filter-pill${laneFilter === "all" ? " active" : ""}`} onClick={() => setLaneFilter("all")}>All lanes</button>
+              {data.lane_names.map((n) => (
+                <button key={n} type="button" className={`filter-pill${laneFilter === n ? " active" : ""}`} onClick={() => setLaneFilter(n)}>
+                  {data.lane_labels[n] || n.replace(/_/g, " ")}
+                </button>
               ))}
+              <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}>
+                <option value="all">All sources</option>
+                {sources.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
+              </select>
+              <input placeholder="Search company, role, location" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-          </LaneSection>
-        ))
-      ) : (
-        <div className="empty-state">
-          {!data.pending.length && <CheckCircleIcon />}
-          {data.pending.length ? "No postings match these filters." : "Nothing waiting on you right now."}
-        </div>
+          )}
+
+          {selected.size > 0 && (
+            <div className="bulk-bar">
+              <span>{selected.size} selected</span>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button type="button" className="secondary" onClick={() => setSelected(new Set())} disabled={bulkBusy}>Clear</button>
+                <button type="button" className="danger" onClick={() => setConfirmTarget({ type: "bulk" })} disabled={bulkBusy}>{bulkBusy ? "Dismissing…" : "Dismiss selected"}</button>
+              </div>
+            </div>
+          )}
+
+          {filteredPendingByLane.length ? (
+            filteredPendingByLane.map((section) => (
+              <LaneSection key={section.slug} section={section}>
+                <div className="posting-list">
+                  {section.rows.map((row) => (
+                    <PostingCard
+                      key={row.posting_key} row={row}
+                      selected={selected.has(row.posting_key)}
+                      onToggleSelect={(checked) => toggleSelect(row.posting_key, checked)}
+                      onPromote={() => promote(row.posting_key)}
+                      onDismiss={() => setConfirmTarget({ type: "single", key: row.posting_key })}
+                      onRetry={() => retry(row.posting_key)}
+                      open={openDetail === row.posting_key}
+                      onToggleOpen={() => setOpenDetail(openDetail === row.posting_key ? null : row.posting_key)}
+                      busy={busyRows[row.posting_key]}
+                    />
+                  ))}
+                </div>
+              </LaneSection>
+            ))
+          ) : (
+            <div className="empty-state">
+              {!data.pending.length && <CheckCircleIcon />}
+              {data.pending.length ? "No postings match these filters." : "Nothing waiting on you right now."}
+            </div>
+          )}
+        </>
       )}
 
-      <h2>Applied</h2>
-      {data.applied.length ? (
-        data.applied_by_lane.map((section) => section.rows.length > 0 && (
-          <LaneSection key={section.slug} section={section} tone="pine">
-            <div className="posting-list">
-              {section.rows.map((row) => (
-                <PostingCard key={row.posting_key} row={row} applied open={false} onToggleOpen={() => {}} />
-              ))}
-            </div>
-          </LaneSection>
-        ))
-      ) : (
-        <div className="empty-state">No applications yet.</div>
+      {tab === "applied" && (
+        data.applied.length ? (
+          data.applied_by_lane.map((section) => section.rows.length > 0 && (
+            <LaneSection key={section.slug} section={section} tone="pine">
+              <div className="posting-list">
+                {section.rows.map((row) => (
+                  <PostingCard key={row.posting_key} row={row} applied open={false} onToggleOpen={() => {}} />
+                ))}
+              </div>
+            </LaneSection>
+          ))
+        ) : (
+          <div className="empty-state">No applications yet.</div>
+        )
       )}
 
-      <Collapsible title="Recent runs" defaultCollapsed={data.summary.length > 5}>
-        {data.summary.length ? (
+      {tab === "runs" && (
+        data.summary.length ? (
           <div className="runs-table">
             <table>
               <thead><tr><th>Date</th><th>New to swipe</th><th>Ready to apply</th><th>Applied</th><th>Emails</th><th>Errors</th></tr></thead>
@@ -514,8 +532,8 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="empty-state">No runs yet.</div>
-        )}
-      </Collapsible>
+        )
+      )}
 
       <ConfirmDialog
         open={!!confirmTarget}
