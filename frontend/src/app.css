@@ -815,6 +815,16 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .posting-actions button { padding: 0.45rem 0.8rem; font-size: 0.82rem; white-space: nowrap; }
 .posting-actions .ghost { margin-right: auto; }
 
+/* Below 640px, .posting-card-top's default row (title/company text next to a
+   flex-shrink:0 action-button cluster) squeezes the text column down to almost
+   nothing -- three non-shrinking buttons easily claim more width than a phone
+   screen has left over. Stack instead: full-width text block, then a full-width
+   action row below it. */
+@media (max-width: 640px) {
+  .posting-card-top { flex-direction: column; align-items: stretch; }
+  .posting-actions { justify-content: flex-start; width: 100%; }
+}
+
 .detail-panel { background: var(--surface-alt); border: 1px solid var(--wire); border-radius: var(--radius-sm); padding: 1rem; margin-top: 0.9rem; }
 .detail-panel-links { display: flex; gap: 0.6rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
 .detail-panel h4 { margin-top: 0; font-size: 0.85rem; }
