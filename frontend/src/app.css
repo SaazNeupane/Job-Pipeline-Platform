@@ -719,41 +719,10 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 
 .lane-section { margin-top: 2rem; }
 .lane-section-head { display: flex; align-items: center; gap: 0.55rem; margin-bottom: 0.85rem; }
-.lane-section-toggle {
-  width: 100%; background: none; border: none; padding: 0.4rem 0; cursor: pointer;
-  font-family: inherit; text-align: left; border-radius: 8px;
-}
-.lane-section-toggle:hover { background: var(--surface-hover, rgba(0, 0, 0, 0.035)); }
 .lane-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--redline); flex-shrink: 0; }
 .lane-section.pine-dot .lane-dot { background: var(--approved); }
 .lane-section-head h3 { margin: 0; font-size: 0.98rem; }
 .lane-count { font-family: var(--font-mono); font-size: 0.76rem; color: var(--ink-faint); }
-.lane-chevron {
-  margin-left: auto; color: var(--ink); font-size: 1.5rem; line-height: 1;
-  width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: transform 0.15s ease;
-}
-.lane-chevron.collapsed { transform: rotate(-90deg); }
-
-/* Reveal transition instead of a hard show/hide jump cut -- both LaneSection and
-   Collapsible now keep their children mounted always and toggle this wrapper's open
-   class instead. grid-template-rows 0fr->1fr animates height without needing to measure
-   the content's pixel height in JS. */
-.lane-section-body, .collapsible-body {
-  display: grid; grid-template-rows: 0fr;
-  transition: grid-template-rows 0.25s ease;
-}
-.lane-section-body.open, .collapsible-body.open { grid-template-rows: 1fr; }
-.lane-section-body-inner, .collapsible-body-inner { min-height: 0; overflow: hidden; }
-
-.collapsible { margin-top: 2rem; }
-.collapsible-head {
-  width: 100%; display: flex; align-items: center; gap: 0.6rem;
-  background: none; border: none; cursor: pointer; font-family: inherit;
-  text-align: left; padding: 0.4rem 0; border-radius: 8px; margin-bottom: 0.5rem;
-}
-.collapsible-head:hover { background: var(--surface-hover, rgba(0, 0, 0, 0.035)); }
-.collapsible-head h2 { margin: 0; }
 
 /* Dashboard section tabs -- the dashboard used to render everything (run control,
    stats, needs-review list, applied list, recent runs) in one long stacked page, which
