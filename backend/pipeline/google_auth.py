@@ -60,6 +60,16 @@ _CLIENT_CONFIG = {
 _credentials_cache: dict[str, Credentials] = {}
 _service_cache: dict[tuple[str, str], object] = {}
 
+# googleapiclient services here wrap an httplib2.Http connection, which is not thread-safe --
+# two threads doing concurrent I/O through the same cached service (keyed per user, shared
+# across requests) corrupts the native heap (crashed the process with SIGSEGV in production,
+# see postings_store.py's _MIRROR_EXECUTOR for the first occurrence of this bug). Any
+# background thread that ends up calling into this module must go through this single-worker
+# executor instead of spawning its own raw thread.
+from concurrent.futures import ThreadPoolExecutor
+
+BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="google-api-bg")
+
 
 def build_authorization_url(state: str) -> tuple[str, str]:
     """Step 1 of the web OAuth flow -- webapp's "Connect Google" button redirects here.

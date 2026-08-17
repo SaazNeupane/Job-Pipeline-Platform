@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import threading
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
@@ -11,6 +9,7 @@ from app.auth import get_current_user
 from app.models import User
 from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
 from pipeline.config import load_profile
+from pipeline.google_auth import BACKGROUND_EXECUTOR
 from pipeline.postings_store import get_postings
 from pipeline.swipe_actions import generate_liked_materials, queue_like, reject_posting
 
@@ -56,7 +55,7 @@ def like(posting_key: str, user: User = Depends(get_current_user)):
         match = queue_like(user.id, posting_key)
     except SystemExit as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
-    threading.Thread(target=_generate_in_background, args=(user.id, match), daemon=True).start()
+    BACKGROUND_EXECUTOR.submit(_generate_in_background, user.id, match)
     return {"ok": True, "row": {"company": match.get("company", ""), "role": match.get("role", "")}}
 
 
