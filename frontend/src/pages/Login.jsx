@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
+import PasswordField from "../components/PasswordField.jsx";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -30,7 +31,7 @@ export default function Login() {
       {error && <p className="error-banner">{error}</p>}
       <form onSubmit={submit}>
         <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></label>
-        <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+        <PasswordField label="Password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         <div className="wizard-actions">
           <button type="submit" className="primary" disabled={busy}>{busy ? "Logging in…" : "Log in"}</button>
         </div>

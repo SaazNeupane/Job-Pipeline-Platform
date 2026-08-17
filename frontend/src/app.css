@@ -136,6 +136,27 @@ input:focus, textarea:focus, select:focus {
   box-shadow: 0 0 0 3px var(--redline-soft);
 }
 
+.password-field { position: relative; display: flex; }
+.password-field input { flex: 1; padding-right: 4.2rem; }
+.password-field .password-toggle {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  background: transparent;
+  border: none;
+  padding: 0.4rem 0.5rem;
+  min-height: 0;
+  cursor: pointer;
+}
+.password-field .password-toggle:hover { color: var(--ink); }
+
 /* minmax(0, 1fr) everywhere here, never bare 1fr -- a bare 1fr track's
    implicit minimum is "auto" (content-based), which lets a track size
    itself to its widest child's min-content and overflow its own grid

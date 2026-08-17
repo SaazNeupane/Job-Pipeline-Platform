@@ -6,11 +6,15 @@ import { api } from "../../api.js";
 // <form> (Back/Next), and nested <form> elements are invalid HTML (the
 // browser silently drops the inner one, so its own submit button would fire
 // the OUTER form instead). Plain button + refs instead.
-function ImportFromPdf({ onImported }) {
+function ImportFromPdf({ laneNames, laneLabels, importedLanes, onImported }) {
   const fileRef = useRef(null);
   const keyRef = useRef(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState("");
+  // Multi-lane accounts (e.g. one resume for "ops", one for "it") need a
+  // separate PDF per lane -- default to the first lane not yet imported so
+  // re-running this after the first import doesn't require re-picking it.
+  const [taggedLane, setTaggedLane] = useState(() => laneNames.find((l) => !importedLanes.includes(l)) || laneNames[0] || "");
 
   async function doImport() {
     const file = fileRef.current?.files[0];
@@ -21,7 +25,8 @@ function ImportFromPdf({ onImported }) {
     setImporting(true);
     try {
       const resume = await api.importResume(file, geminiKey);
-      onImported(resume);
+      onImported(resume, laneNames.length > 1 ? taggedLane : null);
+      if (fileRef.current) fileRef.current.value = "";
     } catch (err) {
       setError(err.message);
     } finally {
@@ -37,8 +42,21 @@ function ImportFromPdf({ onImported }) {
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Gemini API key</a> just for this
         one-time read (you'll enter it again, to keep, on the Keys step next). Nothing is invented: only what's
         actually in the PDF gets pulled in, and it fills the form below for you to review and edit, not saved as-is.
+        {laneNames.length > 1 && " Have a different resume per job type? Import each one separately below — later imports add to what's already here instead of replacing it."}
       </p>
       {error && <p className="error-banner">{error}</p>}
+      {laneNames.length > 1 && (
+        <label>
+          Tag this resume's entries as relevant to
+          <select value={taggedLane} onChange={(e) => setTaggedLane(e.target.value)} disabled={importing}>
+            {laneNames.map((name) => (
+              <option key={name} value={name}>
+                {(laneLabels[name] || name)}{importedLanes.includes(name) ? " (already imported)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <div className="grid2">
         <label>Gemini API key<input ref={keyRef} disabled={importing} /></label>
         <label>Resume PDF<input ref={fileRef} type="file" accept=".pdf" disabled={importing} /></label>
@@ -91,6 +109,27 @@ function fromInitial(resume, applicant) {
   };
 }
 
+// Second (and later) PDF import for a multi-lane account adds to the resume
+// built so far instead of replacing it -- otherwise importing a second
+// lane's PDF would wipe out the first lane's freshly-imported entries.
+// Contact/name/interests only fill in if still blank (first import wins;
+// a second resume's contact info is normally the same person anyway).
+function mergeImportedResume(prev, resume, applicant, taggedLane) {
+  const incoming = fromInitial(resume, applicant);
+  const tag = (list) => (taggedLane ? list.map((item) => ({ ...item, lanes: [...new Set([...(item.lanes || []), taggedLane])] })) : list);
+  return {
+    name: prev.name || incoming.name,
+    phone: prev.phone || incoming.phone,
+    email: prev.email || incoming.email,
+    website: prev.website || incoming.website,
+    education: [...prev.education, ...incoming.education],
+    experience: [...prev.experience, ...tag(incoming.experience)],
+    skills: [...prev.skills, ...tag(incoming.skills)],
+    projects: [...prev.projects, ...tag(incoming.projects)],
+    interests: prev.interests || incoming.interests,
+  };
+}
+
 function LaneChecks({ laneNames, laneLabels, value, onChange }) {
   return (
     <div className="chip-input">
@@ -123,6 +162,7 @@ export default function Resume() {
   const laneNames = draft.lane_names || [];
   const laneLabels = draft.lane_labels || {};
   const [r, setR] = useState(() => fromInitial(draft.shared_resume, draft.applicant));
+  const [importedLanes, setImportedLanes] = useState([]);
   const [error, setError] = useState("");
   // One section on screen at a time -- the old single-page form (contact +
   // education + experience + skills + projects + interests, all at once)
@@ -205,7 +245,19 @@ export default function Resume() {
               Enter your real work history once. On later steps you'll tick which job type(s) each entry applies to.
               An entry only tagged to one job type won't show up on another job type's resume.
             </p>
-            <ImportFromPdf onImported={(resume) => { setR(fromInitial(resume, draft.applicant)); setSection((s) => s + 1); }} />
+            <ImportFromPdf
+              laneNames={laneNames}
+              laneLabels={laneLabels}
+              importedLanes={importedLanes}
+              onImported={(resume, taggedLane) => {
+                setR((prev) => mergeImportedResume(prev, resume, draft.applicant, taggedLane));
+                const nextImported = taggedLane ? [...new Set([...importedLanes, taggedLane])] : importedLanes;
+                setImportedLanes(nextImported);
+                // Auto-advance once every lane has its own imported resume (or there's
+                // only one lane); otherwise stay put so the next lane's PDF can go in.
+                if (laneNames.length <= 1 || laneNames.every((l) => nextImported.includes(l))) setSection((s) => s + 1);
+              }}
+            />
             <p className="hint">Or skip this and fill it in by hand on the next steps.</p>
           </>
         )}

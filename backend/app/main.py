@@ -36,6 +36,18 @@ from app.routers import wizard as wizard_router
 from pipeline import config as pipeline_config
 from pipeline import google_auth as pipeline_google_auth
 
+# No handler was configured before this -- logging.exception() calls (e.g. the daily-run
+# background task, the OAuth callback) fell back to Python's default "last resort" stderr
+# handler, so a traceback only existed in whatever terminal ran uvicorn. Gone the moment
+# that terminal's scrolled past or closed. File handler here keeps it past that.
+_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+_LOG_DIR.mkdir(exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler(_LOG_DIR / "app.log", encoding="utf-8")],
+)
+
 app = FastAPI(title="Job Pipeline Platform API")
 app.include_router(wizard_router.router)
 app.include_router(dashboard_router.router)
@@ -51,6 +63,17 @@ def google_reauth_handler(request: Request, exc: RefreshError):
         status_code=401,
         content={"error": "Google connection expired. Reconnect from the dashboard.", "code": "google_reauth_required"},
     )
+
+
+@app.exception_handler(Exception)
+async def log_unhandled_exception(request: Request, exc: Exception):
+    """Without this, an unhandled route exception only ever reaches uvicorn's own
+    "uvicorn.error" logger, which is configured with propagate=False -- it prints to
+    whatever terminal ran uvicorn and never reaches the file handler set up above. Log it
+    through our own logger (not subject to that) before falling back to Starlette's
+    default 500 response."""
+    logging.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 app.add_middleware(
     CORSMiddleware,
