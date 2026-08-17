@@ -382,7 +382,7 @@ legend {
 .flow-rail.horizontal .flow-node.static:has(.flow-dot:not(:empty))::after { top: 16px; }
 
 /* Landing page --------------------------------------------------------- */
-.hero { padding: 1.5rem 0 0.5rem; }
+.hero { padding: 1.5rem 0 2.5rem; }
 
 /* Sequenced hero reveal: the prompt line types itself out (see Home.jsx's
    useTypewriter), then this class stages in the headline/lede/actions one
@@ -432,52 +432,64 @@ legend {
 }
 .terminal-cursor { display: inline-block; color: var(--redline); animation: cursor-blink 1.1s step-end infinite; }
 @keyframes cursor-blink { 50% { opacity: 0; } }
-.terminal-lede { color: #a9bfae !important; font-size: 1.05rem; max-width: 52ch; }
 .terminal-body .hero-actions { margin-top: 1.8rem; }
 .hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 
-.process-strip { margin: 3.5rem 0 4rem; padding: 2rem 1.5rem; background: var(--surface); border: 1px solid var(--wire); border-radius: var(--radius); }
-.process-strip .flow-rail.horizontal .flow-node { padding-right: 0; }
-/* Below 640px the rail itself switches to a vertical stack (flex-direction: column
-   above), but each node was still laid out for the horizontal rail (icon stacked over
-   label, connector line drawn as a horizontal bar) -- restyle both back to the default
-   vertical-rail look (icon beside label, connector line running down between dots) so
-   stacking the rail doesn't leave mismatched node/line styling on top of it. */
-@media (max-width: 640px) {
-  .process-strip .flow-rail.horizontal { flex-direction: column; align-items: flex-start; gap: 0; }
-  .process-strip .flow-rail.horizontal .flow-node {
-    flex-direction: row;
-    align-items: center;
-    justify-content: flex-start;
-    width: 100%;
-    padding-bottom: 1.35rem;
-    padding-right: 0;
-  }
-  .process-strip .flow-rail.horizontal .flow-node:last-child { padding-bottom: 0; }
-  .process-strip .flow-rail.horizontal .flow-label { text-align: left; }
-  .process-strip .flow-rail.horizontal .flow-node::after {
-    left: 15px;
-    right: auto;
-    top: 27px;
-    bottom: 2px;
-    width: 1px;
-    height: auto;
-  }
-  .process-strip .flow-rail.horizontal .flow-node.static:has(.flow-dot:not(:empty))::after { left: 15px; top: 37px; }
+/* Process strip: continues inside the SAME terminal window the hero's `$ ./run_pipeline
+   --daily` line lives in, rather than a second window with its own titlebar further down
+   the page -- one real terminal session's scrollback: command, then its own output right
+   below it (this block), then a dashed rule marking the return to page content (headline/
+   lede/CTA) below that. The five pipeline stages render as that command's own tree-branch
+   output (like `tree`, pytest, or a build log). Inherits the hero terminal's hardcoded
+   near-black palette by living inside it -- no separate mobile layout needed, it's
+   inherently a vertical list. */
+.pipeline-section { margin: 1.3rem 0 1.8rem; padding-bottom: 1.6rem; border-bottom: 1px dashed #1d3324; }
+.pipeline-stages { list-style: none; margin: 0; padding: 0; }
+/* Each row is invisible until Home.jsx flips it out of "pending" -- driven by real JS
+   timing (a spinner, then a resolution), not a CSS scroll-stagger, so the strip reads as
+   the command actually executing rather than a list politely fading in. */
+.pipeline-stage {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0;
+  font-family: var(--font-mono);
+  opacity: 0;
+  transform: translateX(-6px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
+.pipeline-stage.visible { opacity: 1; transform: translateX(0); }
+.pipeline-branch { color: #2c4a35; font-size: 0.95rem; flex-shrink: 0; }
 
-/* Scroll-reveal: each node starts hidden/lowered and the connecting line starts
-   collapsed to nothing; .in-view (set once by Home.jsx's useInViewport, the first time
-   the strip scrolls into view) staggers each node in and draws the line out to match. */
-.process-strip .flow-node { opacity: 0; transform: translateY(10px); transition: opacity 0.4s ease, transform 0.4s ease; }
-.process-strip .flow-node::after { transform: scaleX(0); transform-origin: left; transition: transform 0.4s ease; }
-.process-strip.in-view .flow-node { opacity: 1; transform: translateY(0); }
-.process-strip.in-view .flow-node::after { transform: scaleX(1); }
-.process-strip .flow-node:nth-child(1) { transition-delay: 0ms; }
-.process-strip .flow-node:nth-child(2) { transition-delay: 70ms; }
-.process-strip .flow-node:nth-child(3) { transition-delay: 140ms; }
-.process-strip .flow-node:nth-child(4) { transition-delay: 210ms; }
-.process-strip .flow-node:nth-child(5) { transition-delay: 280ms; }
+.pipeline-status {
+  flex-shrink: 0;
+  width: 14px; height: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+.pipeline-spinner {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid #2c4a35;
+  border-top-color: var(--redline);
+  animation: spin 0.7s linear infinite;
+}
+.pipeline-status-done { color: var(--approved); }
+.pipeline-status-waiting { color: var(--redline); animation: cursor-blink 1s step-end infinite; }
+
+.pipeline-icon {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--redline);
+}
+.pipeline-icon svg { width: 16px; height: 16px; }
+.pipeline-label { color: #c7dccb; font-size: 0.92rem; }
+.pipeline-time { margin-left: auto; color: #3d6b4a; font-size: 0.8rem; }
+.pipeline-waiting { margin-left: auto; color: var(--redline); font-size: 0.78rem; letter-spacing: 0.03em; text-transform: uppercase; }
+
+.pipeline-final { margin: 0.9rem 0 0; padding-left: 1.6rem; }
 
 /* Guide section, folded into the landing page below the hero -------------- */
 .guide-section { margin-top: 3rem; padding-top: 2.5rem; border-top: 1px solid var(--wire); }

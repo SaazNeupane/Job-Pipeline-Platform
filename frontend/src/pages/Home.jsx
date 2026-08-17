@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import FlowRail from "../components/FlowRail.jsx";
 import { ApplyIcon, FilterIcon, SearchIcon, SwipeIcon, TailorIcon } from "../components/icons.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useInViewport } from "../hooks/useInViewport.js";
 import { useTypewriter } from "../hooks/useTypewriter.js";
 
+// auto: true for the two stages the daily cron actually runs itself (search, filter) and
+// the one it runs the instant you swipe right (tailor) -- these "complete" with a fake but
+// plausible timing, like real build-tool output. auto: false for the two stages that are
+// genuinely you, not automation (swipe, apply) -- these land on "waiting on you" instead of
+// a checkmark, since claiming they "finished" would misrepresent what the product does.
 const PROCESS = [
-  { key: "search", label: "Search real postings", icon: <SearchIcon /> },
-  { key: "filter", label: "Filter to real fits", icon: <FilterIcon /> },
-  { key: "swipe", label: "Swipe to pick favorites", icon: <SwipeIcon /> },
-  { key: "tailor", label: "Tailor resume + letter", icon: <TailorIcon /> },
-  { key: "apply", label: "Apply yourself", icon: <ApplyIcon /> },
+  { key: "search", label: "Search real postings", icon: <SearchIcon />, auto: true, time: "0.61s" },
+  { key: "filter", label: "Filter to real fits", icon: <FilterIcon />, auto: true, time: "0.14s" },
+  { key: "swipe", label: "Swipe to pick favorites", icon: <SwipeIcon />, auto: false },
+  { key: "tailor", label: "Tailor resume + letter", icon: <TailorIcon />, auto: true, time: "0.94s" },
+  { key: "apply", label: "Apply yourself", icon: <ApplyIcon />, auto: false },
 ];
 
 const SETUP_STEPS = [
@@ -70,9 +74,12 @@ export default function Home() {
   const { user, ready } = useAuth();
   const { hash } = useLocation();
   const { shown: promptShown, done: promptDone } = useTypewriter("./run_pipeline --daily", 32);
-  const [stage, setStage] = useState(0); // 0 = typing, 1 = headline, 2 = lede, 3 = actions
+  const [stage, setStage] = useState(0); // 0 = typing, 1 = headline, 2 = actions
   const [processRef, processInView] = useInViewport(0.3);
   const [guideRef, guideInView] = useInViewport(0.15);
+  const [stageStatus, setStageStatus] = useState(() => PROCESS.map(() => "pending"));
+  const [pipelineDone, setPipelineDone] = useState(false);
+  const pipelineStarted = useRef(false);
 
   useEffect(() => {
     if (hash === "#guide") {
@@ -80,12 +87,35 @@ export default function Home() {
     }
   }, [hash]);
 
+  // Runs the process strip like a real command executing, once, the first time it scrolls
+  // into view: each stage shows a spinner, then resolves -- to a checkmark+timing if it's a
+  // stage the pipeline runs itself, or to "waiting on you" if it's a stage that's genuinely
+  // manual (see PROCESS's own comment). Mirrors the hero's typewriter reveal above it.
+  useEffect(() => {
+    if (!processInView || pipelineStarted.current) return;
+    pipelineStarted.current = true;
+    const timers = [];
+    const STEP_MS = 480;
+    const SPIN_MS = 420;
+    PROCESS.forEach((p, i) => {
+      timers.push(setTimeout(() => {
+        setStageStatus((prev) => prev.map((s, idx) => (idx === i ? "spinning" : s)));
+      }, i * STEP_MS));
+      timers.push(setTimeout(() => {
+        setStageStatus((prev) => prev.map((s, idx) => (idx === i ? (p.auto ? "done" : "waiting") : s)));
+        if (i === PROCESS.length - 1) {
+          timers.push(setTimeout(() => setPipelineDone(true), 350));
+        }
+      }, i * STEP_MS + SPIN_MS));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [processInView]);
+
   useEffect(() => {
     if (!promptDone) return;
     const timers = [
       setTimeout(() => setStage(1), 150),
       setTimeout(() => setStage(2), 550),
-      setTimeout(() => setStage(3), 900),
     ];
     return () => timers.forEach(clearTimeout);
   }, [promptDone]);
@@ -101,13 +131,33 @@ export default function Home() {
           <h1 className={`terminal-h1 reveal${stage >= 1 ? " reveal-in" : ""}`}>
             Your job search, running itself{stage >= 1 && <span className="terminal-cursor">_</span>}
           </h1>
-          <p className={`lede terminal-lede reveal${stage >= 2 ? " reveal-in" : ""}`}>
-            It searches real postings every day and filters them down to ones worth your time. You swipe
-            through to pick the jobs you actually want, and it tailors a resume and cover letter for each
-            one you like. You apply yourself, from your own dashboard. Everything runs under your own
-            accounts, and it never invents anything about you.
-          </p>
-          <div className={`hero-actions reveal${stage >= 3 ? " reveal-in" : ""}`}>
+
+          <div ref={processRef} className="pipeline-section">
+            <ol className="pipeline-stages">
+              {PROCESS.map((p, i) => {
+                const status = stageStatus[i];
+                return (
+                  <li key={p.key} className={`pipeline-stage${status !== "pending" ? " visible" : ""}`}>
+                    <span className="pipeline-branch">{i === PROCESS.length - 1 ? "└─" : "├─"}</span>
+                    <span className={`pipeline-status pipeline-status-${status}`}>
+                      {status === "spinning" && <span className="pipeline-spinner" />}
+                      {status === "done" && "✓"}
+                      {status === "waiting" && "▸"}
+                    </span>
+                    <span className="pipeline-icon">{p.icon}</span>
+                    <span className="pipeline-label">{p.label}</span>
+                    {status === "done" && <span className="pipeline-time">{p.time}</span>}
+                    {status === "waiting" && <span className="pipeline-waiting">waiting on you</span>}
+                  </li>
+                );
+              })}
+            </ol>
+            <p className={`terminal-line pipeline-final${pipelineDone ? " reveal-in" : ""} reveal`}>
+              <span className="terminal-prompt">$</span> <span className="terminal-cursor">_</span>
+            </p>
+          </div>
+
+          <div className={`hero-actions reveal${stage >= 2 ? " reveal-in" : ""}`}>
             {ready && user ? (
               <Link className="button primary" to="/dashboard">Go to your dashboard</Link>
             ) : (
@@ -116,10 +166,6 @@ export default function Home() {
             <a className="button secondary" href="#guide">Read the guide first</a>
           </div>
         </TerminalWindow>
-      </div>
-
-      <div ref={processRef} className={`process-strip${processInView ? " in-view" : ""}`}>
-        <FlowRail horizontal steps={PROCESS.map((p) => ({ ...p, state: "static" }))} />
       </div>
 
       <div id="guide" className="guide-section">
