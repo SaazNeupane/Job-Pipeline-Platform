@@ -438,7 +438,33 @@ legend {
 
 .process-strip { margin: 3.5rem 0 4rem; padding: 2rem 1.5rem; background: var(--surface); border: 1px solid var(--wire); border-radius: var(--radius); }
 .process-strip .flow-rail.horizontal .flow-node { padding-right: 0; }
-@media (max-width: 640px) { .process-strip .flow-rail.horizontal { flex-direction: column; align-items: flex-start; } }
+/* Below 640px the rail itself switches to a vertical stack (flex-direction: column
+   above), but each node was still laid out for the horizontal rail (icon stacked over
+   label, connector line drawn as a horizontal bar) -- restyle both back to the default
+   vertical-rail look (icon beside label, connector line running down between dots) so
+   stacking the rail doesn't leave mismatched node/line styling on top of it. */
+@media (max-width: 640px) {
+  .process-strip .flow-rail.horizontal { flex-direction: column; align-items: flex-start; gap: 0; }
+  .process-strip .flow-rail.horizontal .flow-node {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
+    padding-bottom: 1.35rem;
+    padding-right: 0;
+  }
+  .process-strip .flow-rail.horizontal .flow-node:last-child { padding-bottom: 0; }
+  .process-strip .flow-rail.horizontal .flow-label { text-align: left; }
+  .process-strip .flow-rail.horizontal .flow-node::after {
+    left: 15px;
+    right: auto;
+    top: 27px;
+    bottom: 2px;
+    width: 1px;
+    height: auto;
+  }
+  .process-strip .flow-rail.horizontal .flow-node.static:has(.flow-dot:not(:empty))::after { left: 15px; top: 37px; }
+}
 
 /* Scroll-reveal: each node starts hidden/lowered and the connecting line starts
    collapsed to nothing; .in-view (set once by Home.jsx's useInViewport, the first time
