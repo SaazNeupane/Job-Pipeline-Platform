@@ -29,6 +29,10 @@ def set_session(db: Session | None) -> None:
     _session_var.set(db)
 
 
+def get_session() -> Session | None:
+    return _session_var.get()
+
+
 def _require_session() -> Session:
     db = _session_var.get()
     if db is None:
@@ -107,12 +111,6 @@ class Profile:
     # filesystem here, so those two call sites were changed to `profile.resumes[name]`
     # directly instead, and this dict is populated from ProfileRow.resumes_json.
     resumes: dict[str, dict] = field(default_factory=dict)
-
-    def lane(self, name: str) -> Lane:
-        for lane in self.lanes:
-            if lane.name == name:
-                return lane
-        raise KeyError(f"No lane named {name!r} in profile {self.user!r}")
 
 
 def load_profile(user: str) -> Profile:

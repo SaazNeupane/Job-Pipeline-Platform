@@ -7,12 +7,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
-from app.db import get_db
 from app.models import User
-from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
+from app.routers._dashboard_helpers import group_by_lane, lane_label
 from pipeline.config import load_profile, load_secrets
 from pipeline.dismiss_application import dismiss_application, dismiss_applications
 from pipeline.google_auth import BACKGROUND_EXECUTOR

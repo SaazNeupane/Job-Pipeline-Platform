@@ -124,12 +124,6 @@ def exchange_code_for_credential(user_id: str, code: str, code_verifier: str) ->
     return existing
 
 
-def invalidate_credentials(user: str) -> None:
-    _credentials_cache.pop(user, None)
-    for key in [k for k in _service_cache if k[0] == user]:
-        _service_cache.pop(key, None)
-
-
 def get_credentials(user: str) -> Credentials:
     creds = _credentials_cache.get(user)
     if creds is None:
