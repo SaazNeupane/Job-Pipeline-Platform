@@ -80,34 +80,43 @@ def run(
         f"(lanes={[l.name for l in lanes]}, max_age_days={max_age_days}, cold_email_only={cold_email_only})"
     )
 
+    # Board-based sources (greenhouse/lever/ashby) search the same profile-level board
+    # list regardless of which lane asked for them -- fetching once per lane that shares
+    # a source used to refetch the exact same boards multiple times per run (confirmed
+    # live: a real 2-lane profile with both lanes listing "greenhouse" fetched all 24
+    # configured boards twice, ~118MB of redundant traffic, a real contributor to the
+    # Render OOM restarts). Keyword-based sources (adzuna/hiring_cafe) differ per lane,
+    # so those fetch once per source too, but with the UNION of every lane's keywords
+    # that wants that source -- still covers every lane's real search terms, just
+    # without re-querying a keyword two lanes happen to share.
+    sources_needed = {s for lane in lanes for s in lane.sources}
     all_postings = []
-    for lane in lanes:
-        if "greenhouse" in lane.sources:
-            result = _try(f"search_greenhouse[{lane.name}]", search_greenhouse, profile.greenhouse_boards)
-            all_postings.extend(result or [])
 
-        if "hiring_cafe" in lane.sources:
-            result = _try(f"search_hiring_cafe[{lane.name}]", search_hiring_cafe, lane.keywords)
-            all_postings.extend(result or [])
+    if "greenhouse" in sources_needed:
+        result = _try("search_greenhouse", search_greenhouse, profile.greenhouse_boards)
+        all_postings.extend(result or [])
 
-        if "lever" in lane.sources:
-            result = _try(f"search_lever[{lane.name}]", search_lever, profile.lever_companies)
-            all_postings.extend(result or [])
+    if "lever" in sources_needed:
+        result = _try("search_lever", search_lever, profile.lever_companies)
+        all_postings.extend(result or [])
 
-        if "ashby" in lane.sources:
-            result = _try(f"search_ashby[{lane.name}]", search_ashby, profile.ashby_boards)
-            all_postings.extend(result or [])
+    if "ashby" in sources_needed:
+        result = _try("search_ashby", search_ashby, profile.ashby_boards)
+        all_postings.extend(result or [])
 
-        if "adzuna" in lane.sources:
-            app_id, app_key = secrets.get("ADZUNA_APP_ID"), secrets.get("ADZUNA_APP_KEY")
-            if app_id and app_key:
-                result = _try(
-                    f"search_adzuna[{lane.name}]", search_adzuna,
-                    lane.keywords, profile.adzuna_country, app_id, app_key,
-                )
-                all_postings.extend(result or [])
-            else:
-                errors.append(f"search_adzuna[{lane.name}]: missing ADZUNA_APP_ID/ADZUNA_APP_KEY, skipped")
+    if "hiring_cafe" in sources_needed:
+        hiring_cafe_keywords = sorted({kw for lane in lanes if "hiring_cafe" in lane.sources for kw in lane.keywords})
+        result = _try("search_hiring_cafe", search_hiring_cafe, hiring_cafe_keywords)
+        all_postings.extend(result or [])
+
+    if "adzuna" in sources_needed:
+        app_id, app_key = secrets.get("ADZUNA_APP_ID"), secrets.get("ADZUNA_APP_KEY")
+        if app_id and app_key:
+            adzuna_keywords = sorted({kw for lane in lanes if "adzuna" in lane.sources for kw in lane.keywords})
+            result = _try("search_adzuna", search_adzuna, adzuna_keywords, profile.adzuna_country, app_id, app_key)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_adzuna: missing ADZUNA_APP_ID/ADZUNA_APP_KEY, skipped")
 
     # Postings can arrive from more than one source in the same run (e.g. a
     # Greenhouse posting found both directly and via hiring.cafe) — collapse
