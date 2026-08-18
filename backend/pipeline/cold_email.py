@@ -154,6 +154,11 @@ direct note, not a full pitch.
 - Output plain text only — no markdown, no bracketed placeholders, no \
 subject line, no preamble. Just the email body, ready to send, ending with \
 a sign-off and the applicant's name.
+- This email has no attachment and links to nothing. Never say or imply \
+that a resume, portfolio, or any file is attached, linked, or enclosed — \
+common phrases like "I've attached my resume" or "please find attached" \
+would be false here. If you want to reference their experience, describe \
+it directly in the note instead.
 """
 
 
