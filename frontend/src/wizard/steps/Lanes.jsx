@@ -42,6 +42,13 @@ const LANE_ICONS = {
   manufacturing: "⚙️", accounting_finance: "💰", marketing_creative: "🎨", cleaning_janitorial: "🧹",
 };
 
+const SENIORITY_LABELS = {
+  intern: "Internship only",
+  entry: "Entry-level only",
+  intermediate: "Up to intermediate/mid-level",
+  senior: "Up to senior (no cap in practice)",
+};
+
 export default function Lanes() {
   const { draft, refreshDraft } = useOutletContext();
   const navigate = useNavigate();
@@ -49,7 +56,9 @@ export default function Lanes() {
   const [selectedPresets, setSelectedPresets] = useState(new Set(draft.lane_names || []));
   const [presetExcluded, setPresetExcluded] = useState({}); // preset name -> Set of unchecked default keywords
   const [presetExtra, setPresetExtra] = useState({}); // preset name -> "add your own" text
+  const [presetSeniority, setPresetSeniority] = useState({}); // preset name -> overridden level, "" = preset's own default
   const [customLanes, setCustomLanes] = useState([]);
+  const [presetFilter, setPresetFilter] = useState("");
   const [greenhouseBoards, setGreenhouseBoards] = useState((draft.greenhouse_boards || []).join(", "));
   const [leverCompanies, setLeverCompanies] = useState((draft.lever_companies || []).join(", "));
   const [ashbyBoards, setAshbyBoards] = useState((draft.ashby_boards || []).join(", "));
@@ -103,8 +112,14 @@ export default function Lanes() {
     const presets = [...selectedPresets].map((name) => {
       const excluded = presetExcluded[name] || new Set();
       const extra = csv(presetExtra[name] || "");
-      const changed = excluded.size > 0 || extra.length > 0;
-      return changed ? { name, keywords: presetKeywords(name) } : { name };
+      const keywordsChanged = excluded.size > 0 || extra.length > 0;
+      const seniority = presetSeniority[name];
+      const seniorityChanged = seniority !== undefined && seniority !== (meta.presets[name].seniority_max || "");
+      return {
+        name,
+        ...(keywordsChanged ? { keywords: presetKeywords(name) } : {}),
+        ...(seniorityChanged ? { seniority_max: seniority || null } : {}),
+      };
     });
     const custom_lanes = customLanes
       .filter((c) => c.label.trim() || c.keywords.trim())
@@ -141,6 +156,13 @@ export default function Lanes() {
 
   if (!meta) return <Loading />;
 
+  const filterText = presetFilter.trim().toLowerCase();
+  const filteredPresets = Object.entries(meta.presets).filter(([name, lane]) => {
+    if (!filterText) return true;
+    const haystack = `${lane.label} ${(meta.preset_blurbs || {})[name] || ""} ${lane.keywords.join(" ")}`.toLowerCase();
+    return haystack.includes(filterText);
+  });
+
   return (
     <>
       <h1>What kind of jobs are you applying for?</h1>
@@ -148,8 +170,17 @@ export default function Lanes() {
       {error && <p className="error-banner">{error}</p>}
 
       <form onSubmit={submit}>
+        <input
+          className="lane-search"
+          value={presetFilter}
+          onChange={(e) => setPresetFilter(e.target.value)}
+          placeholder="Search job types (e.g. warehouse, driver, admin)"
+        />
+        {filteredPresets.length === 0 && (
+          <p className="hint">No built-in job type matches "{presetFilter}". Build your own further down instead.</p>
+        )}
         <div className="lane-grid">
-          {Object.entries(meta.presets).map(([name, lane]) => (
+          {filteredPresets.map(([name, lane]) => (
             <label key={name} className="lane-card">
               <input type="checkbox" className="sr-only" checked={selectedPresets.has(name)} onChange={() => togglePreset(name)} />
               <span className="lane-card-check" aria-hidden="true">✓</span>
@@ -199,6 +230,18 @@ export default function Lanes() {
                   onChange={(e) => setPresetExtra({ ...presetExtra, [name]: e.target.value })}
                   placeholder="e.g. pastry chef, line cook"
                 />
+              </label>
+              <label>
+                Experience level
+                <select
+                  value={presetSeniority[name] ?? (meta.presets[name].seniority_max || "")}
+                  onChange={(e) => setPresetSeniority({ ...presetSeniority, [name]: e.target.value })}
+                >
+                  <option value="">No limit</option>
+                  {(meta.seniority_levels || []).map((level) => (
+                    <option key={level} value={level}>{SENIORITY_LABELS[level] || level}</option>
+                  ))}
+                </select>
               </label>
             </details>
           );
@@ -283,7 +326,9 @@ function CustomLaneEditor({ lane, meta, onChange, onRemove }) {
             Experience level
             <select value={lane.seniority_max} onChange={(e) => onChange({ seniority_max: e.target.value })}>
               <option value="">No limit</option>
-              <option value="entry">Entry-level only</option>
+              {(meta.seniority_levels || []).map((level) => (
+                <option key={level} value={level}>{SENIORITY_LABELS[level] || level}</option>
+              ))}
             </select>
           </label>
         </div>
