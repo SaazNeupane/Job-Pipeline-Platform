@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import secrets as _secrets
+import time
 import uuid
 
 from datetime import date, datetime
@@ -208,18 +209,29 @@ def me(user: User = Depends(get_current_user)):
 # Google OAuth connect (Sheets/Gmail/Drive scopes, separate from app login above)
 # ---------------------------------------------------------------------------
 
-# In-memory state->(user_id, pkce code_verifier) map for the OAuth redirect round trip.
-# Short-lived (a user completes consent within a couple minutes or restarts the flow) --
-# fine as in-process state even across Render's free-tier idle-sleep, since a sleep would
-# drop an in-flight OAuth redirect anyway and the user just clicks "Connect Google" again.
-_oauth_state: dict[str, tuple[str, str]] = {}
+# In-memory state->(user_id, pkce code_verifier, created_at) map for the OAuth redirect
+# round trip. Short-lived by design (a user completes consent within a couple minutes or
+# restarts the flow) -- but a real leak existed here: the error branch below returned
+# without popping the entry (every denied-consent click left one behind forever), and a
+# tab closed mid-flow (no callback at all) was never cleaned up either. _prune_oauth_state
+# sweeps anything older than _OAUTH_STATE_TTL_SECONDS on every new /start call, so this
+# dict can't grow unbounded even from abandoned attempts.
+_oauth_state: dict[str, tuple[str, str, float]] = {}
+_OAUTH_STATE_TTL_SECONDS = 600
+
+
+def _prune_oauth_state() -> None:
+    cutoff = time.monotonic() - _OAUTH_STATE_TTL_SECONDS
+    for stale_state in [s for s, (_, _, created_at) in _oauth_state.items() if created_at < cutoff]:
+        _oauth_state.pop(stale_state, None)
 
 
 @app.get("/api/oauth/google/start")
 def google_oauth_start(user: User = Depends(get_current_user)):
+    _prune_oauth_state()
     state = _secrets.token_urlsafe(24)
     auth_url, code_verifier = pipeline_google_auth.build_authorization_url(state)
-    _oauth_state[state] = (user.id, code_verifier)
+    _oauth_state[state] = (user.id, code_verifier, time.monotonic())
     return {"authorization_url": auth_url}
 
 
@@ -234,12 +246,13 @@ def google_oauth_callback(code: str = "", state: str = "", error: str = ""):
     target = f"{frontend_origin}/setup/google"
 
     if error:
+        _oauth_state.pop(state, None)
         return RedirectResponse(f"{target}?error={error}")
 
     entry = _oauth_state.pop(state, None)
     if entry is None:
         return RedirectResponse(f"{target}?error=expired_state")
-    user_id, code_verifier = entry
+    user_id, code_verifier, _created_at = entry
     try:
         pipeline_google_auth.exchange_code_for_credential(user_id, code, code_verifier)
     except Exception:  # noqa: BLE001 -- surfaced to the user via the redirect, not a crash

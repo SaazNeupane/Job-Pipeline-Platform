@@ -31,6 +31,15 @@ GREENHOUSE_API_BASE = "https://boards-api.greenhouse.io/v1/boards"
 REQUEST_TIMEOUT_SECONDS = 15
 REQUEST_DELAY_SECONDS = 1.0  # be polite to the public API between boards
 
+# A single run can pull thousands of postings (3692 seen in one real local run) into
+# memory at once before filter.py narrows them down to the handful that get queued --
+# most never need their full description past the initial keyword/years-experience scan
+# in filter.py, so an unbounded per-posting description is the single biggest lever on a
+# run's peak memory. 20k chars comfortably covers real job descriptions (the signal
+# filter.py/tailor_resume.py look for is almost always in the first few thousand chars);
+# this only trims the rare pathological outlier, not real content.
+MAX_DESCRIPTION_CHARS = 20_000
+
 
 @dataclass
 class Posting:
@@ -60,6 +69,10 @@ class Posting:
     employment_type: str = ""  # "full_time" | "part_time" | "contract" | ""
     salary_min: float | None = None
     salary_max: float | None = None
+
+    def __post_init__(self) -> None:
+        if len(self.description_text) > MAX_DESCRIPTION_CHARS:
+            self.description_text = self.description_text[:MAX_DESCRIPTION_CHARS]
 
     def dedupe_key(self) -> str:
         return f"{self.source}:{self.job_id}"
@@ -422,6 +435,16 @@ def _hiring_cafe_posting(hit: dict[str, Any]) -> Posting:
     )
 
 
+# Unlike Adzuna (paginated, explicitly capped at 3 pages/query below), this endpoint
+# returns every hit for a query in one response with no pagination at all -- a real run
+# pulled 3692 unique postings total across sources for one lane's 6 keywords, and this
+# uncapped source was the dominant contributor (confirmed against Render's memory graph
+# spiking exactly at the hourly scheduled-run trigger, 2026-08-17). Capped per query, same
+# defensive reasoning as Adzuna's own cap: bound worst-case memory for one run, not chase
+# a slow leak that isn't there.
+HIRING_CAFE_MAX_HITS_PER_QUERY = 150
+
+
 def search_hiring_cafe(queries: list[str]) -> list[Posting]:
     try:
         build_id = _hiring_cafe_build_id()
@@ -442,7 +465,7 @@ def search_hiring_cafe(queries: list[str]) -> list[Posting]:
         if response is None:
             continue
 
-        hits = response.json().get("pageProps", {}).get("ssrHits", [])
+        hits = response.json().get("pageProps", {}).get("ssrHits", [])[:HIRING_CAFE_MAX_HITS_PER_QUERY]
         for hit in hits:
             posting = _hiring_cafe_posting(hit)
             postings_by_key[posting.dedupe_key()] = posting

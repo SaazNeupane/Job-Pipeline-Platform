@@ -114,6 +114,12 @@ def run(
     # by dedupe_key before filtering, not just against the Sheet's history.
     unique_postings = list({p.dedupe_key(): p for p in all_postings}.values())
     print(f"[run_pipeline] {len(unique_postings)} unique postings across all sources")
+    # all_postings (pre-dedupe, can hold real duplicates across sources -- e.g. the same
+    # Greenhouse posting found both directly and via hiring.cafe) is never read again below,
+    # but the rest of this function (dedupe-key lookups, per-lane filtering, queueing, cold
+    # email) is long -- drop the reference now instead of holding two overlapping copies of
+    # the same postings alive for no reason for the rest of the run.
+    del all_postings
 
     # Dedupe against applied_jobs (real submissions), pending_approval (held
     # postings), AND dismissed_jobs (postings you explicitly said no to via
