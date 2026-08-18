@@ -15,11 +15,14 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.crypto import encrypt
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.models import OAuthCredential, Profile as ProfileRow, Secret, User, WizardDraft
+from pipeline import config as pipeline_config
 from pipeline import setup_sheet
 from pipeline import wizard as wizard_logic
+from pipeline.filter import SENIORITY_LEVELS
 from pipeline.geocode import geocode_address
+from pipeline.google_auth import BACKGROUND_EXECUTOR
 
 router = APIRouter(prefix="/api/wizard", tags=["wizard"])
 logger = logging.getLogger(__name__)
@@ -116,11 +119,19 @@ def set_lanes(body: dict, user: User = Depends(get_current_user), db: Session = 
     presets = body.get("presets") or []
     custom_lanes_in = body.get("custom_lanes") or []
 
+    def _preset_overrides(p: dict) -> dict | None:
+        overrides = {}
+        if p.get("keywords"):
+            overrides["keywords"] = p["keywords"]
+        # "seniority_max" only present in the payload when the user actually touched
+        # that preset's override select on the Lanes step -- absent means "keep the
+        # preset's own default", present (even as null, for "no limit") means override.
+        if "seniority_max" in p:
+            overrides["seniority_max"] = p["seniority_max"]
+        return overrides or None
+
     try:
-        lanes = [
-            wizard_logic.resolve_preset_lane(p["name"], {"keywords": p["keywords"]} if p.get("keywords") else None)
-            for p in presets
-        ]
+        lanes = [wizard_logic.resolve_preset_lane(p["name"], _preset_overrides(p)) for p in presets]
         for c in custom_lanes_in:
             lanes.append(wizard_logic.build_custom_lane(
                 c.get("label", ""),
@@ -212,6 +223,22 @@ def _upsert_secret(db: Session, user_id: str, key_name: str, value: str) -> None
         row.value_encrypted = encrypt(value)
 
 
+def _create_sheet_worker(user_id: str) -> str:
+    """Runs on google_auth.BACKGROUND_EXECUTOR's single worker thread, not the request
+    thread -- create_sheet()'s get_sheets_service() can hit the same shared per-user
+    credentials/service cache a concurrent mirror write or swipe-like is using, and that
+    cache isn't thread-safe (see google_auth.py's own docstring on BACKGROUND_EXECUTOR).
+    Own DB session since get_credentials() needs one on a cache miss and this doesn't run
+    on the request thread that already has one bound."""
+    db = SessionLocal()
+    pipeline_config.set_session(db)
+    try:
+        return setup_sheet.create_sheet(user_id)
+    finally:
+        pipeline_config.set_session(None)
+        db.close()
+
+
 @router.post("/finalize")
 def finalize(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     draft_row = _get_or_create_draft(db, user.id)
@@ -232,7 +259,7 @@ def finalize(user: User = Depends(get_current_user), db: Session = Depends(get_d
         db.add(profile_row)
 
     try:
-        sheet_id = profile_row.sheet_id or setup_sheet.create_sheet(user.id)
+        sheet_id = profile_row.sheet_id or BACKGROUND_EXECUTOR.submit(_create_sheet_worker, user.id).result()
     except Exception:  # noqa: BLE001 -- shown to the user, not a crash
         logger.exception("create_sheet failed for user_id=%r", user.id)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Couldn't create your Google Sheet. Try reconnecting Google and try again.")
@@ -264,4 +291,5 @@ def lane_presets():
         "source_options": wizard_logic.SOURCE_OPTIONS,
         "remote_type_options": wizard_logic.REMOTE_TYPE_OPTIONS,
         "employment_type_options": wizard_logic.EMPLOYMENT_TYPE_OPTIONS,
+        "seniority_levels": SENIORITY_LEVELS,
     }

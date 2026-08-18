@@ -16,6 +16,7 @@ import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from starlette.requests import Request
 
 load_dotenv()
 
@@ -29,7 +30,17 @@ class Base(DeclarativeBase):
     pass
 
 
-def get_db():
+def get_db(request: Request):
+    """bind_db_session_for_pipeline (app/main.py) already opens one session per request
+    and stashes it on request.state.db -- reuse that instead of opening a second one, so
+    a route handler that both takes Depends(get_db) and calls into pipeline/* (which reads
+    the same session via a contextvar) doesn't hold two live Postgres connections for one
+    request. The middleware owns closing it; this generator's own finally only runs for
+    the (non-HTTP) fallback path below."""
+    shared = getattr(request.state, "db", None)
+    if shared is not None:
+        yield shared
+        return
     db: Session = SessionLocal()
     try:
         yield db

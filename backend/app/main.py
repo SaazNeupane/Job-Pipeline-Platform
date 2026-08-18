@@ -90,20 +90,18 @@ INTERNAL_SHARED_SECRET = os.environ["INTERNAL_SHARED_SECRET"]
 async def bind_db_session_for_pipeline(request, call_next):
     """Every pipeline/* module reads the current DB session via a contextvar (see
     pipeline/config.py's module docstring) instead of an extra function parameter --
-    this sets it once per request from the same session FastAPI's own Depends(get_db)
-    would create, so route handlers that call into pipeline/* don't need to pass a
-    session through manually."""
-    db_gen = get_db()
-    db: Session = next(db_gen)
+    this opens one session per request and sets it once, so route handlers that call into
+    pipeline/* don't need to pass a session through manually. Stashed on request.state.db
+    too, so get_db()'s own Depends(get_db) reuses this same session instead of opening a
+    second Postgres connection for the same request (see app/db.py's get_db)."""
+    db: Session = SessionLocal()
+    request.state.db = db
     pipeline_config.set_session(db)
     try:
         response = await call_next(request)
     finally:
         pipeline_config.set_session(None)
-        try:
-            next(db_gen)
-        except StopIteration:
-            pass
+        db.close()
     return response
 
 
@@ -304,19 +302,24 @@ def mint_invite(db: Session = Depends(get_db)):
     return {"code": invite.code}
 
 
-def _run_pipeline_in_background(
-    user_id: str, lane_filter: str | None = None, max_age_days: int | None = None, cold_email_only: bool = False,
+def _run_pipeline_worker(
+    user_id: str, lane_filter: str | None, max_age_days: int | None, cold_email_only: bool,
 ) -> None:
-    """A full run (search + filter + several LLM calls per lane) can easily exceed what's
-    safe to hold a single HTTP request open for on Render's free tier -- runs in the
-    background with its own DB session (the request's session closes as soon as the 202
-    response goes out) instead of blocking the scheduler's per-user call.
+    """Runs on pipeline_google_auth.BACKGROUND_EXECUTOR's single worker thread, not
+    Starlette's own background-task threadpool -- run() calls into cold_email.py's
+    get_gmail_service/send_email, which touch the same shared per-user
+    _credentials_cache/_service_cache that Sheet mirror writes, swipe likes, and retries
+    all already serialize through this same executor. Running it on a separate thread
+    (as this used to) let a daily run's Gmail calls race a concurrent mirror write against
+    that cache -- the exact SIGSEGV/heap-corruption bug already fixed twice for other call
+    sites (see postings_store.py's _fire_mirror and swipe.py/dashboard.py's like/retry).
 
+    Own DB session since this doesn't run on a request thread with one already bound.
     active_users() includes every signed-up user regardless of wizard progress, so the
     daily cron will hit users mid-wizard (no Profile row yet) -- skip those cleanly instead
-    of letting load_profile()'s LookupError blow up as an unhandled background-task
-    exception. Any other failure is logged with the user id so it's actually visible in
-    server logs instead of an anonymous traceback."""
+    of letting load_profile()'s LookupError blow up as an unhandled exception. Any other
+    failure is logged with the user id so it's actually visible in server logs instead of
+    an anonymous traceback."""
     from pipeline.run_pipeline import run
 
     db = SessionLocal()
@@ -331,6 +334,19 @@ def _run_pipeline_in_background(
     finally:
         pipeline_config.set_session(None)
         db.close()
+
+
+def _run_pipeline_in_background(
+    user_id: str, lane_filter: str | None = None, max_age_days: int | None = None, cold_email_only: bool = False,
+) -> None:
+    """A full run (search + filter + several LLM calls per lane) can easily exceed what's
+    safe to hold a single HTTP request open for on Render's free tier -- dispatched via
+    BackgroundTasks so the request/scheduler call returns immediately, but the actual work
+    is submitted onto pipeline_google_auth.BACKGROUND_EXECUTOR (see _run_pipeline_worker's
+    docstring for why) and waited on here, so this call only returns once the run is done."""
+    pipeline_google_auth.BACKGROUND_EXECUTOR.submit(
+        _run_pipeline_worker, user_id, lane_filter, max_age_days, cold_email_only
+    ).result()
 
 
 @app.post("/api/internal/run/{user_id}", dependencies=[Depends(_require_internal_secret)], status_code=status.HTTP_202_ACCEPTED)
@@ -368,10 +384,15 @@ def run_now(
     # tweaking its keywords" use case, which would be pointless if blocked every time
     # the scheduled run already fired today).
     if not body.lane_filter and not body.cold_email_only:
+        # Restore whatever the middleware had bound before this check, not None -- this
+        # request's contextvar is shared with bind_db_session_for_pipeline's own session,
+        # and nulling it out here would strand any pipeline call later in this handler
+        # (or in a dependency ordered after this one) with no session to read.
+        prev_session = pipeline_config.get_session()
         pipeline_config.set_session(db)
         today = date.today().isoformat()
         already_ran = any(s["date"] == today for s in get_daily_summaries(user.id))
-        pipeline_config.set_session(None)
+        pipeline_config.set_session(prev_session)
         if already_ran:
             raise HTTPException(status.HTTP_409_CONFLICT, "Already ran today. Try again tomorrow.")
 

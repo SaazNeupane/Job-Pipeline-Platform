@@ -16,17 +16,40 @@ from pipeline.text_match import word_boundary_match
 RECENCY_MAX_AGE_DAYS = 14
 EARTH_RADIUS_KM = 6371.0
 
-# Titles containing these (word-boundary matched) are excluded when a
-# lane's seniority_max is "entry". "intermediate"/"ii"/"iii"/"iv" added
-# 2026-08-06 after a real live gap: "Intermediate Backend Engineer" isn't
-# "senior"-labeled at all, so the original list let it straight through an
-# entry-only lane — the intent is "not entry-level", not just "not
-# literally called senior."
+# A lane's seniority_max is a cap on a small ladder (intern < entry <
+# intermediate < senior), not just a binary entry-only switch -- each tier
+# below is title-based signal for where a posting sits on that ladder. A
+# title matching none of them defaults to "entry", same as the original
+# entry-only behavior before this ladder existed (most entry postings never
+# bother labeling themselves "entry-level" at all, so treating unlabeled
+# titles as senior-by-default would silently exclude the bulk of real entry
+# postings from an entry-capped lane).
+INTERN_TITLE_TERMS = ["intern", "internship", "co-op", "coop", "trainee"]
+JUNIOR_TITLE_TERMS = ["junior", "jr.", "entry level", "entry-level", "new grad", "new-grad"]
+# "intermediate"/"ii"/"iii"/"iv" added 2026-08-06 after a real live gap:
+# "Intermediate Backend Engineer" isn't "senior"-labeled at all, so the
+# original entry-only list let it straight through an entry-capped lane --
+# the intent is "not entry-level", not just "not literally called senior."
+MID_TITLE_TERMS = ["intermediate", "mid-level", "mid level", "ii", "iii", "iv"]
 SENIOR_TITLE_TERMS = [
     "senior", "sr.", "staff", "principal", "director", "vp", "vice president",
-    "head of", "manager", "executive", "intermediate", "mid-level", "mid level",
-    "lead", "ii", "iii", "iv",
+    "head of", "manager", "executive", "lead",
 ]
+
+SENIORITY_LEVELS = ["intern", "entry", "intermediate", "senior"]
+_SENIORITY_RANK = {level: i for i, level in enumerate(SENIORITY_LEVELS)}
+
+
+def _title_seniority_rank(title: str) -> int:
+    if any(word_boundary_match(term, title) for term in SENIOR_TITLE_TERMS):
+        return _SENIORITY_RANK["senior"]
+    if any(word_boundary_match(term, title) for term in MID_TITLE_TERMS):
+        return _SENIORITY_RANK["intermediate"]
+    if any(word_boundary_match(term, title) for term in INTERN_TITLE_TERMS):
+        return _SENIORITY_RANK["intern"]
+    if any(word_boundary_match(term, title) for term in JUNIOR_TITLE_TERMS):
+        return _SENIORITY_RANK["entry"]
+    return _SENIORITY_RANK["entry"]
 
 # Pulls a stated minimum years-of-experience requirement out of a posting's
 # own text — "5+ years of experience", "3-5 years experience",
@@ -228,10 +251,10 @@ def _match_terms(posting: Posting, lane: Lane) -> list[str]:
 
 
 def _exceeds_seniority(posting: Posting, lane: Lane) -> bool:
-    if lane.seniority_max != "entry":
+    cap = lane.seniority_max
+    if not cap or cap not in _SENIORITY_RANK:
         return False
-    title = posting.title.lower()
-    return any(word_boundary_match(term, title) for term in SENIOR_TITLE_TERMS)
+    return _title_seniority_rank(posting.title.lower()) > _SENIORITY_RANK[cap]
 
 
 def _exceeds_years_experience(posting: Posting, lane: Lane) -> bool:
