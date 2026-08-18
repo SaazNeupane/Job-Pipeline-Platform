@@ -42,8 +42,13 @@ function ImportFromPdf({ laneNames, laneLabels, importedLanes, onImported }) {
         <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Gemini API key</a> just for this
         one-time read (you'll enter it again, to keep, on the Keys step next). Nothing is invented: only what's
         actually in the PDF gets pulled in, and it fills the form below for you to review and edit, not saved as-is.
-        {laneNames.length > 1 && " Have a different resume per job type? Import each one separately below — later imports add to what's already here instead of replacing it."}
+        {laneNames.length > 1 && " Have a different resume per job type? Import each one separately below: later imports add to what's already here instead of replacing it."}
       </p>
+      <ol className="steps-list hint">
+        <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+        <li>Sign in with your Google account</li>
+        <li>Click "Create API key" and paste it into the field below</li>
+      </ol>
       {error && <p className="error-banner">{error}</p>}
       {laneNames.length > 1 && (
         <label>
@@ -75,6 +80,97 @@ const BULLET_MARKER_RE = /^[\s]*(?:[•◦▪‣∙·*-]|\d+[.)])\s+/;
 const lines = (s) => s.split("\n").map((v) => v.trim().replace(BULLET_MARKER_RE, "")).filter(Boolean);
 const csv = (s) => s.split(",").map((v) => v.trim()).filter(Boolean);
 const uid = () => crypto.randomUUID();
+
+// One text input per bullet instead of a single textarea people have to
+// remember to newline-separate themselves -- real feedback: the "one per
+// line" instruction on a plain textarea confused people. Still backs onto
+// the same newline-joined string every caller already reads/writes
+// (lines() splits it back into an array at submit time), so this is a pure
+// UI swap, no state-shape change needed anywhere else.
+function BulletListInput({ value, onChange, placeholder }) {
+  const items = value ? value.split("\n") : [""];
+
+  function updateItem(i, text) {
+    const next = [...items];
+    next[i] = text;
+    onChange(next.join("\n"));
+  }
+  function addItem() {
+    onChange([...items, ""].join("\n"));
+  }
+  function removeItem(i) {
+    const next = items.filter((_, idx) => idx !== i);
+    onChange((next.length ? next : [""]).join("\n"));
+  }
+
+  return (
+    <div className="bullet-list">
+      {items.map((text, i) => (
+        <div className="bullet-list-row" key={i}>
+          <input
+            value={text}
+            placeholder={i === 0 ? placeholder : undefined}
+            onChange={(e) => updateItem(i, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addItem();
+              }
+            }}
+          />
+          {items.length > 1 && (
+            <button type="button" className="ghost bullet-list-remove" onClick={() => removeItem(i)} aria-label="Remove this point">✕</button>
+          )}
+        </div>
+      ))}
+      <button type="button" className="ghost" onClick={addItem}>+ Add point</button>
+    </div>
+  );
+}
+
+// Type-and-commit chips instead of a raw comma-separated text field --
+// same confusion as the bullet fields above, just for a comma convention
+// instead of a newline one. Backs onto the same comma-joined string every
+// caller already reads/writes (csv() splits it back into an array at
+// submit time), so this is a pure UI swap too.
+function ChipListInput({ value, onChange, placeholder }) {
+  const items = csv(value);
+  const [draft, setDraft] = useState("");
+
+  function commit(raw) {
+    const v = raw.trim().replace(/,$/, "").trim();
+    setDraft("");
+    if (v) onChange([...items, v].join(", "));
+  }
+  function removeItem(i) {
+    onChange(items.filter((_, idx) => idx !== i).join(", "));
+  }
+
+  return (
+    <div className="chip-list-input">
+      {items.length > 0 && (
+        <div className="chip-input">
+          {items.map((item, i) => (
+            <span className="chip" key={`${item}-${i}`}>
+              {item}
+              <button type="button" onClick={() => removeItem(i)} aria-label={`Remove ${item}`}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <input
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => (e.target.value.includes(",") ? commit(e.target.value) : setDraft(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") { e.preventDefault(); commit(draft); }
+          else if (e.key === "Backspace" && !draft && items.length) removeItem(items.length - 1);
+        }}
+        onBlur={() => draft && commit(draft)}
+      />
+    </div>
+  );
+}
 
 // Mirrors webapp/wizard.py's build_resume_json: an entry tagged to a
 // DIFFERENT selected lane is hidden from this one; untagged is neutral and
@@ -233,7 +329,7 @@ export default function Resume() {
     <>
       <h1>Build your resume</h1>
       <p className="hint">
-        Step {section + 1} of {SECTIONS.length}: {SECTIONS[section].label}. Bullets and highlights: one per line.
+        Step {section + 1} of {SECTIONS.length}: {SECTIONS[section].label}.
         Nothing here is invented for you; this is exactly what the pipeline will use, tailored to each posting.
       </p>
       {error && <p className="error-banner">{error}</p>}
@@ -265,12 +361,10 @@ export default function Resume() {
         {sectionKey === "contact" && (
           <fieldset>
             <legend>Contact</legend>
-            <label>Full name<input value={r.name} onChange={(e) => update({ name: e.target.value })} required /></label>
-            <div className="grid3">
-              <label>Phone<input value={r.phone} onChange={(e) => update({ phone: e.target.value })} /></label>
-              <label>Email<input type="email" value={r.email} onChange={(e) => update({ email: e.target.value })} /></label>
-              <label>Website<input value={r.website} onChange={(e) => update({ website: e.target.value })} /></label>
-            </div>
+            <p className="hint">Using the name from the About You step: {r.name || "(not set yet)"}.</p>
+            <label>Phone<input value={r.phone} onChange={(e) => update({ phone: e.target.value })} /></label>
+            <label>Email<input type="email" value={r.email} onChange={(e) => update({ email: e.target.value })} /></label>
+            <label>Website<input value={r.website} onChange={(e) => update({ website: e.target.value })} /></label>
           </fieldset>
         )}
 
@@ -280,13 +374,20 @@ export default function Resume() {
             {r.education.map((e) => (
               <div className="entry-block" key={e.id}>
                 <label>Institution<input value={e.institution} onChange={(ev) => updateList("education", e.id, { institution: ev.target.value })} /></label>
-                <div className="grid3">
+                <label>Credential<input value={e.credential} onChange={(ev) => updateList("education", e.id, { credential: ev.target.value })} placeholder="e.g. Diploma in ..." /></label>
+                <div className="grid2">
                   <label>Location<input value={e.location} onChange={(ev) => updateList("education", e.id, { location: ev.target.value })} /></label>
-                  <label>Credential<input value={e.credential} onChange={(ev) => updateList("education", e.id, { credential: ev.target.value })} placeholder="e.g. Diploma in ..." /></label>
                   <label>Dates<input value={e.dates} onChange={(ev) => updateList("education", e.id, { dates: ev.target.value })} placeholder="e.g. 2024" /></label>
                 </div>
                 <label>GPA (optional)<input value={e.gpa} onChange={(ev) => updateList("education", e.id, { gpa: ev.target.value })} /></label>
-                <label>Highlights (one per line, optional)<textarea rows={3} value={e.highlights} onChange={(ev) => updateList("education", e.id, { highlights: ev.target.value })} /></label>
+                <label>
+                  Highlights (optional)
+                  <BulletListInput
+                    value={e.highlights}
+                    onChange={(v) => updateList("education", e.id, { highlights: v })}
+                    placeholder="Dean's List, 2023"
+                  />
+                </label>
                 <button type="button" className="ghost" onClick={() => removeFrom("education", e.id)}>Remove</button>
               </div>
             ))}
@@ -299,15 +400,18 @@ export default function Resume() {
             <legend>Work experience</legend>
             {r.experience.map((e) => (
               <div className="entry-block" key={e.id}>
-                <div className="grid2">
-                  <label>Company<input value={e.company} onChange={(ev) => updateList("experience", e.id, { company: ev.target.value })} /></label>
-                  <label>Job title<input value={e.title} onChange={(ev) => updateList("experience", e.id, { title: ev.target.value })} /></label>
-                </div>
-                <div className="grid2">
-                  <label>Location<input value={e.location} onChange={(ev) => updateList("experience", e.id, { location: ev.target.value })} /></label>
-                  <label>Dates<input value={e.dates} onChange={(ev) => updateList("experience", e.id, { dates: ev.target.value })} placeholder="e.g. 2023 - Present" /></label>
-                </div>
-                <label>What you did (one bullet per line)<textarea rows={4} value={e.bullets} onChange={(ev) => updateList("experience", e.id, { bullets: ev.target.value })} /></label>
+                <label>Company<input value={e.company} onChange={(ev) => updateList("experience", e.id, { company: ev.target.value })} /></label>
+                <label>Job title<input value={e.title} onChange={(ev) => updateList("experience", e.id, { title: ev.target.value })} /></label>
+                <label>Location<input value={e.location} onChange={(ev) => updateList("experience", e.id, { location: ev.target.value })} /></label>
+                <label>Dates<input value={e.dates} onChange={(ev) => updateList("experience", e.id, { dates: ev.target.value })} placeholder="e.g. 2023 - Present" /></label>
+                <label>
+                  What you did
+                  <BulletListInput
+                    value={e.bullets}
+                    onChange={(v) => updateList("experience", e.id, { bullets: v })}
+                    placeholder="Trained 5 new hires on POS system and store procedures"
+                  />
+                </label>
                 <div>
                   <span className="hint">Relevant to (leave unchecked = show on every resume; checking one hides it from the others)</span>
                   <LaneChecks laneNames={laneNames} laneLabels={laneLabels} value={e.lanes} onChange={(v) => updateList("experience", e.id, { lanes: v })} />
@@ -325,10 +429,15 @@ export default function Resume() {
             <p className="hint">Group skills into categories, e.g. "Languages: Python, JavaScript".</p>
             {r.skills.map((s) => (
               <div className="entry-block" key={s.id}>
-                <div className="grid2">
-                  <label>Category name<input value={s.name} onChange={(ev) => updateList("skills", s.id, { name: ev.target.value })} placeholder="e.g. Languages" /></label>
-                  <label>Skills (comma-separated)<input value={s.items} onChange={(ev) => updateList("skills", s.id, { items: ev.target.value })} /></label>
-                </div>
+                <label>Category name<input value={s.name} onChange={(ev) => updateList("skills", s.id, { name: ev.target.value })} placeholder="e.g. Languages" /></label>
+                <label>
+                  Skills
+                  <ChipListInput
+                    value={s.items}
+                    onChange={(v) => updateList("skills", s.id, { items: v })}
+                    placeholder="Type a skill and press Enter"
+                  />
+                </label>
                 <div>
                   <span className="hint">Relevant to (leave unchecked = show on every resume)</span>
                   <LaneChecks laneNames={laneNames} laneLabels={laneLabels} value={s.lanes} onChange={(v) => updateList("skills", s.id, { lanes: v })} />
@@ -347,7 +456,14 @@ export default function Resume() {
               <div className="entry-block" key={p.id}>
                 <label>Project name<input value={p.name} onChange={(ev) => updateList("projects", p.id, { name: ev.target.value })} /></label>
                 <label>One-line description<input value={p.description} onChange={(ev) => updateList("projects", p.id, { description: ev.target.value })} /></label>
-                <label>Details (one bullet per line)<textarea rows={3} value={p.bullets} onChange={(ev) => updateList("projects", p.id, { bullets: ev.target.value })} /></label>
+                <label>
+                  Details
+                  <BulletListInput
+                    value={p.bullets}
+                    onChange={(v) => updateList("projects", p.id, { bullets: v })}
+                    placeholder="Built a REST API with Node.js and PostgreSQL"
+                  />
+                </label>
                 <div>
                   <span className="hint">Relevant to (leave unchecked = show on every resume)</span>
                   <LaneChecks laneNames={laneNames} laneLabels={laneLabels} value={p.lanes} onChange={(v) => updateList("projects", p.id, { lanes: v })} />
@@ -362,7 +478,7 @@ export default function Resume() {
         {sectionKey === "interests" && (
           <fieldset>
             <legend>Interests (optional)</legend>
-            <label>Comma-separated<input value={r.interests} onChange={(e) => update({ interests: e.target.value })} /></label>
+            <ChipListInput value={r.interests} onChange={(v) => update({ interests: v })} placeholder="Type an interest and press Enter" />
           </fieldset>
         )}
 

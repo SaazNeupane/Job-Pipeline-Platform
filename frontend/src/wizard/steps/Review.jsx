@@ -3,50 +3,91 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../../api.js";
 import Loading from "../../components/Loading.jsx";
 
+const SENIORITY_LABELS = { intern: "internships only", entry: "entry-level only", intermediate: "up to intermediate", senior: "up to senior" };
+
+// Short, scannable facts about what a lane will actually search for -- the settings
+// most likely to be wrong (and most annoying to discover only after finalize creates
+// the Google Sheet), pulled from the same lane config that drives real search/filter
+// logic, not restated from the wizard form state.
+function laneSearchFacts(lane) {
+  if (!lane) return [];
+  const facts = [`${lane.keywords?.length || 0} keyword${(lane.keywords?.length || 0) === 1 ? "" : "s"}`];
+  if (lane.seniority_max) facts.push(SENIORITY_LABELS[lane.seniority_max] || lane.seniority_max);
+  if (lane.remote_types?.length) facts.push(lane.remote_types.join("/"));
+  if (lane.employment_types?.length) facts.push(lane.employment_types.join("/").replace(/_/g, " "));
+  if (lane.salary_min || lane.salary_max) {
+    facts.push(lane.salary_min && lane.salary_max ? `$${lane.salary_min}–$${lane.salary_max}` : `$${lane.salary_min || lane.salary_max}+`);
+  }
+  if (lane.radius_km) facts.push(`within ${lane.radius_km}km`);
+  return facts;
+}
+
 function ReviewSummary({ profile, resumes }) {
   const laneNames = (profile.lanes || []).map((lane) => lane.name);
+  const tiles = [
+    {
+      label: "Applying as",
+      value: `${profile.applicant?.first_name || ""} ${profile.applicant?.last_name || ""} (${profile.applicant?.country || ""})`,
+    },
+    {
+      label: "Job types",
+      value: laneNames.length ? laneNames.map((n) => n.replace(/_/g, " ")).join(", ") : "none yet",
+    },
+    {
+      label: "Boards searched",
+      value: `${profile.greenhouse_boards?.length || 0} Greenhouse, ${profile.lever_companies?.length || 0} Lever, ${profile.ashby_boards?.length || 0} Ashby`,
+    },
+    { label: "Countries accepted", value: profile.target_countries?.length ? profile.target_countries.join(", ") : "any" },
+    { label: "Daily queue limit", value: `${profile.apply_daily_cap} per lane, per day` },
+    { label: "Run time", value: `${String(profile.run_hour_utc ?? 14).padStart(2, "0")}:00 UTC` },
+    { label: "Connected Google account", value: profile.gmail_address },
+  ];
+
   return (
     <div className="card">
       <h2 style={{ marginTop: 0 }}>Summary</h2>
-      <dl className="summary-list">
-        <dt>Applying as</dt>
-        <dd>{profile.applicant?.first_name} {profile.applicant?.last_name} ({profile.applicant?.country})</dd>
+      <div className="summary-grid">
+        {tiles.map((tile) => (
+          <div className="summary-tile" key={tile.label}>
+            <div className="eyebrow">{tile.label}</div>
+            <div className="summary-value">{tile.value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="hint" style={{ marginTop: "0.6rem" }}>Blank board fields above use our default lists.</p>
 
-        <dt>Job types</dt>
-        <dd>{laneNames.length ? laneNames.map((n) => n.replace(/_/g, " ")).join(", ") : "none yet"}</dd>
-
-        <dt>Boards searched</dt>
-        <dd>
-          {(profile.greenhouse_boards?.length || 0)} Greenhouse, {(profile.lever_companies?.length || 0)} Lever, {(profile.ashby_boards?.length || 0)} Ashby
-          {" "}(blank fields use our default lists)
-        </dd>
-
-        <dt>Countries accepted</dt>
-        <dd>{profile.target_countries?.length ? profile.target_countries.join(", ") : "any"}</dd>
-
-        <dt>Daily queue limit</dt>
-        <dd>{profile.apply_daily_cap} new postings per lane, per day</dd>
-
-        <dt>Run time</dt>
-        <dd>{String(profile.run_hour_utc ?? 14).padStart(2, "0")}:00 UTC</dd>
-
-        <dt>Connected Google account</dt>
-        <dd>{profile.gmail_address}</dd>
-
-        <dt>Resumes</dt>
-        <dd>
+      <div className="resume-breakdown">
+        <span className="eyebrow">Resumes</span>
+        <div className="resume-lane-grid">
           {Object.entries(resumes || {}).map(([laneName, resume]) => {
             const relevant = resume.experience?.relevant?.length || 0;
             const additional = resume.experience?.additional?.length || 0;
-            const projects = resume.projects?.length || 0;
+            const skillCount = Object.values(resume.skills || {}).flat().length;
+            const stats = [
+              { label: "Experience", value: relevant + additional },
+              { label: "Skills", value: skillCount },
+              { label: "Projects", value: resume.projects?.length || 0 },
+              { label: "Education", value: resume.education?.length || 0 },
+            ];
+            const lane = (profile.lanes || []).find((l) => l.name === laneName);
+            const facts = laneSearchFacts(lane);
             return (
-              <div key={laneName}>
-                {laneName.replace(/_/g, " ")}: {relevant + additional} experience entr{relevant + additional === 1 ? "y" : "ies"}, {projects} project{projects === 1 ? "" : "s"}, {resume.education?.length || 0} education entr{(resume.education?.length || 0) === 1 ? "y" : "ies"}
+              <div className="resume-lane-card" key={laneName}>
+                <div className="resume-lane-name">{laneName.replace(/_/g, " ")}</div>
+                <div className="resume-lane-stats">
+                  {stats.map((s) => (
+                    <div className="resume-lane-stat" key={s.label}>
+                      <span className="resume-lane-stat-num">{s.value}</span>
+                      <span className="resume-lane-stat-label">{s.label}</span>
+                    </div>
+                  ))}
+                </div>
+                {facts.length > 0 && <div className="resume-lane-facts">Searching: {facts.join(" · ")}</div>}
               </div>
             );
           })}
-        </dd>
-      </dl>
+        </div>
+      </div>
     </div>
   );
 }
