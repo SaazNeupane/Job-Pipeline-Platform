@@ -417,7 +417,16 @@ def _run_pipeline_worker(
     daily cron will hit users mid-wizard (no Profile row yet) -- skip those cleanly instead
     of letting load_profile()'s LookupError blow up as an unhandled exception. Any other
     failure is logged with the user id so it's actually visible in server logs instead of
-    an anonymous traceback."""
+    an anonymous traceback.
+
+    The same-day guard also lives here, not just in run_now()'s route handler -- checking
+    only there is check-then-act with no lock: two quick /api/run-now clicks can both see
+    "no summary yet" and both get submitted before either finishes. Re-checking here is safe
+    from that race because this function only ever runs on this user's own single-worker
+    executor (pipeline_google_auth.submit_for_user) -- two submissions for the same user
+    execute one at a time, never concurrently, so by the time the second one actually starts
+    the first has either written its DailySummary row (making this check catch it) or is
+    still running (impossible, since the executor wouldn't have started the second yet)."""
     from pipeline.run_pipeline import run
 
     db = SessionLocal()
@@ -426,6 +435,13 @@ def _run_pipeline_worker(
         if db.query(Profile).filter(Profile.user_id == user_id).first() is None:
             logging.info("Skipping daily run for %s: wizard not finished yet, no profile row", user_id)
             return
+        if not lane_filter and not cold_email_only:
+            from pipeline.postings_store import get_daily_summaries
+
+            today = utcnow().date().isoformat()
+            if any(s["date"] == today for s in get_daily_summaries(user_id)):
+                logging.info("Skipping run for %s: already ran today", user_id)
+                return
         run(user_id, lane_filter=lane_filter, max_age_days=max_age_days, cold_email_only=cold_email_only)
     except Exception:
         logging.exception("Daily run failed for user %s", user_id)
