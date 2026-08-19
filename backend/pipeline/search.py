@@ -522,6 +522,106 @@ def _adzuna_posting(job: dict[str, Any]) -> Posting:
     )
 
 
+WORKDAY_RESULTS_PER_PAGE = 20
+# Confirmed live against workday.wd5.myworkdayjobs.com/Workday (342 real postings):
+# the list endpoint (`POST .../wday/cxs/{tenant}/{site}/jobs`) has no per-company cap
+# and no description field — only a job-detail fetch (one request per posting) has
+# jobDescription. Doing that per posting would multiply request count by however many
+# jobs a board lists (342 here); same "bound worst-case cost, don't chase every field"
+# reasoning as hiring.cafe/Adzuna's own page caps, so this stays list-only for now —
+# filter.py's keyword/years-experience checks fall back to title-only matching when
+# description_text is empty, same fail-open behavior as any other missing field.
+WORKDAY_MAX_PAGES = 5
+
+_WORKDAY_TIME_TYPE_TO_EMPLOYMENT_TYPE = {"full time": "full_time", "part time": "part_time", "contract": "contract"}
+# Confirmed live: remoteType facet values are exactly {"Flex","Onsite","Remote"}.
+# "Flex" (Workday's own term for a mixed/flexible arrangement) doesn't map cleanly to
+# our hybrid/onsite/remote enum, so it's left unmapped and falls through to the same
+# location-text inference every other source uses for unrecognized values.
+_WORKDAY_REMOTE_TYPE_MAP = {"remote": "remote", "onsite": "onsite"}
+
+
+def _post_with_retry_log(
+    url: str, *, source_label: str, item_label: str, json_body: dict,
+) -> requests.Response | None:
+    try:
+        response = requests.post(url, json=json_body, timeout=REQUEST_TIMEOUT_SECONDS)
+        response.raise_for_status()
+        return response
+    except requests.RequestException as exc:
+        print(f"[{source_label}] {item_label}: request failed ({exc}), skipping")
+        return None
+
+
+def _workday_posting(host: str, site: str, tenant: str, job: dict[str, Any]) -> Posting:
+    location = job.get("locationsText", "") or ""
+    title = job.get("title", "")
+    remote_type = _WORKDAY_REMOTE_TYPE_MAP.get(str(job.get("remoteType", "")).strip().lower(), "")
+    if not remote_type:
+        remote_type = _infer_remote_type(f"{location} {title}")
+
+    req_ids = job.get("bulletFields") or []
+    job_id = str(req_ids[0]) if req_ids else str(job.get("externalPath", ""))
+
+    return Posting(
+        source="workday",
+        company=tenant,
+        job_id=job_id,
+        title=title,
+        url=f"https://{host}/{site}{job.get('externalPath', '')}",
+        location=location,
+        posted_at=job.get("postedOn", ""),
+        ats_type="workday",
+        remote_type=remote_type,
+        employment_type=_WORKDAY_TIME_TYPE_TO_EMPLOYMENT_TYPE.get(
+            str(job.get("timeType", "")).strip().lower(), ""
+        ),
+    )
+
+
+def search_workday(boards: list[str]) -> list[Posting]:
+    """Workday's public job-board API — unlike Greenhouse/Lever/Ashby, one board needs
+    three identifiers, not one: the tenant's own myworkdayjobs.com host (varies per
+    company, e.g. "workday.wd5.myworkdayjobs.com"), the tenant slug, and the site name
+    (Workday's term for a specific careers page under that tenant). `boards` entries are
+    "host/tenant/site" strings, e.g. "workday.wd5.myworkdayjobs.com/workday/Workday".
+    Confirmed live against that exact board: POST with a JSON body (not query params,
+    unlike every other source here), no key needed.
+    """
+    postings = []
+    for i, board in enumerate(boards):
+        if i > 0:
+            time.sleep(REQUEST_DELAY_SECONDS)
+
+        try:
+            host, tenant, site = board.split("/", 2)
+        except ValueError:
+            print(f"[search_workday] {board!r}: expected \"host/tenant/site\", skipping")
+            continue
+
+        url = f"https://{host}/wday/cxs/{tenant}/{site}/jobs"
+        offset = 0
+        for page in range(WORKDAY_MAX_PAGES):
+            if page > 0:
+                time.sleep(REQUEST_DELAY_SECONDS)
+            response = _post_with_retry_log(
+                url, source_label="search_workday", item_label=f"{board} offset {offset}",
+                json_body={"appliedFacets": {}, "limit": WORKDAY_RESULTS_PER_PAGE, "offset": offset, "searchText": ""},
+            )
+            if response is None:
+                break
+
+            jobs = response.json().get("jobPostings", [])
+            for job in jobs:
+                postings.append(_workday_posting(host, site, tenant, job))
+
+            if len(jobs) < WORKDAY_RESULTS_PER_PAGE:
+                break  # short page — no more results for this board
+            offset += WORKDAY_RESULTS_PER_PAGE
+
+    return postings
+
+
 def search_adzuna(queries: list[str], country: str, app_id: str, app_key: str) -> list[Posting]:
     """Adzuna's public API, documented and stable (unlike hiring.cafe's
     internal endpoint) — one query per lane keyword, results merged and
