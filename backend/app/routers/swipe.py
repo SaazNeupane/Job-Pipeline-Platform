@@ -10,7 +10,7 @@ from app.auth import get_current_user
 from app.models import User
 from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
 from pipeline.config import load_profile
-from pipeline.google_auth import BACKGROUND_EXECUTOR
+from pipeline.google_auth import submit_for_user
 from pipeline.postings_store import get_postings
 from pipeline.swipe_actions import add_manual_posting, generate_liked_materials, queue_like, reject_posting
 
@@ -77,7 +77,7 @@ def add_manual(body: ManualPostingRequest, user: User = Depends(get_current_user
         match = add_manual_posting(user.id, body.lane, body.text, body.url)
     except SystemExit as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
-    BACKGROUND_EXECUTOR.submit(_generate_in_background, user.id, match)
+    submit_for_user(user.id, _generate_in_background, user.id, match)
     return {"ok": True, "row": {"company": match.get("company", ""), "role": match.get("role", "")}}
 
 
@@ -87,7 +87,7 @@ def like(posting_key: str, user: User = Depends(get_current_user)):
         match = queue_like(user.id, posting_key)
     except SystemExit as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
-    BACKGROUND_EXECUTOR.submit(_generate_in_background, user.id, match)
+    submit_for_user(user.id, _generate_in_background, user.id, match)
     return {"ok": True, "row": {"company": match.get("company", ""), "role": match.get("role", "")}}
 
 

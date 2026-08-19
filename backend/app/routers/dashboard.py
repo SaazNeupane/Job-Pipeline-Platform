@@ -13,7 +13,7 @@ from app.models import User
 from app.routers._dashboard_helpers import group_by_lane, lane_label
 from pipeline.config import load_profile, load_secrets
 from pipeline.dismiss_application import dismiss_application, dismiss_applications
-from pipeline.google_auth import BACKGROUND_EXECUTOR
+from pipeline.google_auth import submit_for_user
 from pipeline.postings_store import get_cold_emails, get_daily_summaries, get_postings_multi
 from pipeline.promote_application import promote_application
 from pipeline.swipe_actions import generate_liked_materials, retry_generation
@@ -116,5 +116,5 @@ def retry(posting_key: str, user: User = Depends(get_current_user)):
         row = retry_generation(user.id, posting_key)
     except SystemExit as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
-    BACKGROUND_EXECUTOR.submit(_regenerate_in_background, user.id, row)
+    submit_for_user(user.id, _regenerate_in_background, user.id, row)
     return {"ok": True}

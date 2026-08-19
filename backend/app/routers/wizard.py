@@ -25,7 +25,7 @@ from pipeline import setup_sheet
 from pipeline import wizard as wizard_logic
 from pipeline.filter import SENIORITY_LEVELS
 from pipeline.geocode import geocode_address
-from pipeline.google_auth import BACKGROUND_EXECUTOR
+from pipeline.google_auth import submit_for_user
 from pipeline.tailor_resume import render_resume_pdf
 
 router = APIRouter(prefix="/api/wizard", tags=["wizard"])
@@ -249,12 +249,12 @@ def _upsert_secret(db: Session, user_id: str, key_name: str, value: str) -> None
 
 
 def _create_sheet_worker(user_id: str) -> str:
-    """Runs on google_auth.BACKGROUND_EXECUTOR's single worker thread, not the request
-    thread -- create_sheet()'s get_sheets_service() can hit the same shared per-user
-    credentials/service cache a concurrent mirror write or swipe-like is using, and that
-    cache isn't thread-safe (see google_auth.py's own docstring on BACKGROUND_EXECUTOR).
-    Own DB session since get_credentials() needs one on a cache miss and this doesn't run
-    on the request thread that already has one bound."""
+    """Runs on this user's own single-worker executor (see google_auth.submit_for_user),
+    not the request thread -- create_sheet()'s get_sheets_service() can hit the same shared
+    per-user credentials/service cache a concurrent mirror write or swipe-like for this same
+    user is using, and that cache isn't thread-safe. Own DB session since get_credentials()
+    needs one on a cache miss and this doesn't run on the request thread that already has
+    one bound."""
     db = SessionLocal()
     pipeline_config.set_session(db)
     try:
@@ -284,7 +284,7 @@ def finalize(user: User = Depends(get_current_user), db: Session = Depends(get_d
         db.add(profile_row)
 
     try:
-        sheet_id = profile_row.sheet_id or BACKGROUND_EXECUTOR.submit(_create_sheet_worker, user.id).result()
+        sheet_id = profile_row.sheet_id or submit_for_user(user.id, _create_sheet_worker, user.id).result()
     except Exception:  # noqa: BLE001 -- shown to the user, not a crash
         logger.exception("create_sheet failed for user_id=%r", user.id)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Couldn't create your Google Sheet. Try reconnecting Google and try again.")

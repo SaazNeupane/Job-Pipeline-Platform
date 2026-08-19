@@ -377,14 +377,14 @@ def mint_invite(db: Session = Depends(get_db)):
 def _run_pipeline_worker(
     user_id: str, lane_filter: str | None, max_age_days: int | None, cold_email_only: bool,
 ) -> None:
-    """Runs on pipeline_google_auth.BACKGROUND_EXECUTOR's single worker thread, not
-    Starlette's own background-task threadpool -- run() calls into cold_email.py's
-    get_gmail_service/send_email, which touch the same shared per-user
-    _credentials_cache/_service_cache that Sheet mirror writes, swipe likes, and retries
-    all already serialize through this same executor. Running it on a separate thread
-    (as this used to) let a daily run's Gmail calls race a concurrent mirror write against
-    that cache -- the exact SIGSEGV/heap-corruption bug already fixed twice for other call
-    sites (see postings_store.py's _fire_mirror and swipe.py/dashboard.py's like/retry).
+    """Runs on this user's own single-worker executor (see
+    pipeline_google_auth.submit_for_user), not Starlette's own background-task threadpool --
+    run() calls into cold_email.py's get_gmail_service/send_email, which touch the same
+    shared per-user _credentials_cache/_service_cache that Sheet mirror writes, swipe likes,
+    and retries for this same user already serialize through. Running it on a separate raw
+    thread (as this used to) let a daily run's Gmail calls race a concurrent mirror write
+    against that cache -- the exact SIGSEGV/heap-corruption bug already fixed twice for other
+    call sites (see postings_store.py's _fire_mirror and swipe.py/dashboard.py's like/retry).
 
     Own DB session since this doesn't run on a request thread with one already bound.
     active_users() includes every signed-up user regardless of wizard progress, so the
@@ -414,10 +414,12 @@ def _run_pipeline_in_background(
     """A full run (search + filter + several LLM calls per lane) can easily exceed what's
     safe to hold a single HTTP request open for on Render's free tier -- dispatched via
     BackgroundTasks so the request/scheduler call returns immediately, but the actual work
-    is submitted onto pipeline_google_auth.BACKGROUND_EXECUTOR (see _run_pipeline_worker's
-    docstring for why) and waited on here, so this call only returns once the run is done."""
-    pipeline_google_auth.BACKGROUND_EXECUTOR.submit(
-        _run_pipeline_worker, user_id, lane_filter, max_age_days, cold_email_only
+    is submitted onto this user's own single-worker executor (see
+    pipeline_google_auth.submit_for_user and _run_pipeline_worker's docstring for why) and
+    waited on here, so this call only returns once the run is done. Different users' runs
+    are on separate executors, so they run concurrently instead of queuing behind each other."""
+    pipeline_google_auth.submit_for_user(
+        user_id, _run_pipeline_worker, user_id, lane_filter, max_age_days, cold_email_only
     ).result()
 
 

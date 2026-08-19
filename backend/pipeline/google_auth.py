@@ -63,12 +63,40 @@ _service_cache: dict[tuple[str, str], object] = {}
 # googleapiclient services here wrap an httplib2.Http connection, which is not thread-safe --
 # two threads doing concurrent I/O through the same cached service (keyed per user, shared
 # across requests) corrupts the native heap (crashed the process with SIGSEGV in production,
-# see postings_store.py's _MIRROR_EXECUTOR for the first occurrence of this bug). Any
-# background thread that ends up calling into this module must go through this single-worker
-# executor instead of spawning its own raw thread.
-from concurrent.futures import ThreadPoolExecutor
+# see postings_store.py's own docstring for the first occurrence of this bug). Any background
+# thread that ends up calling into this module must go through submit_for_user() below instead
+# of spawning its own raw thread.
+#
+# A single GLOBAL single-worker executor (the original fix) serializes every user's work
+# behind everyone else's -- one user's multi-minute daily run blocks every other user's
+# swipe-like/retry until it finishes, and the failure mode is invisible (no error, work just
+# queues silently). The actual constraint is per-user: _service_cache/_credentials_cache are
+# keyed by user id, so two DIFFERENT users' services were never at risk of racing each other,
+# only two threads touching the SAME user's cached service. One single-worker executor per
+# user id gets the same safety with real cross-user concurrency.
+import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 
-BACKGROUND_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="google-api-bg")
+_user_executors: dict[str, ThreadPoolExecutor] = {}
+_user_executors_lock = threading.Lock()
+
+
+def _executor_for_user(user_id: str) -> ThreadPoolExecutor:
+    executor = _user_executors.get(user_id)
+    if executor is None:
+        with _user_executors_lock:
+            executor = _user_executors.get(user_id)
+            if executor is None:
+                executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"google-api-{user_id[:8]}")
+                _user_executors[user_id] = executor
+    return executor
+
+
+def submit_for_user(user_id: str, fn, *args, **kwargs) -> Future:
+    """Submits fn(*args, **kwargs) onto this user's own single-worker executor -- safe to
+    call concurrently for different users (they run in parallel), but still serializes any
+    two calls for the SAME user against their own cached credentials/service objects."""
+    return _executor_for_user(user_id).submit(fn, *args, **kwargs)
 
 
 def build_authorization_url(state: str) -> tuple[str, str]:

@@ -22,7 +22,7 @@ from app.models import DailySummary as DailySummaryRow
 from app.models import Posting as PostingRow
 from pipeline.config import _require_session, load_profile
 from pipeline.filter import posting_fingerprint
-from pipeline.google_auth import BACKGROUND_EXECUTOR
+from pipeline.google_auth import submit_for_user
 
 # status -> the Sheet tab that status's rows mirror to, matching setup_sheet.py's tab names.
 TAB_BY_STATUS = {
@@ -130,16 +130,17 @@ def _mirror_worker(user: str, fn) -> None:
 # google_auth.py's _service_cache: it caches and shares ONE googleapiclient service object
 # (wrapping an httplib2.Http connection) per user across every caller, and httplib2 is not
 # thread-safe. Any two threads doing concurrent I/O through that same cached service can
-# corrupt the interpreter's native heap. Routed through google_auth.BACKGROUND_EXECUTOR (the
-# single shared single-worker pool for ALL background Google-API work, not a private one here)
-# after a second SIGSEGV in production on 2026-08-16 -- swipe.py's /like and dashboard.py's
-# /retry each spawned their own raw thread into generate_liked_materials/retry_generation,
-# which also hit this same cache, so a private mirror-only executor wasn't enough: two
-# different single-worker pools can still race each other on the same cached service.
+# corrupt the interpreter's native heap. Routed through google_auth.submit_for_user (this
+# user's own single-worker pool, shared with every other background Google-API call for the
+# same user -- see that module's own docstring) after a second SIGSEGV in production on
+# 2026-08-16 -- swipe.py's /like and dashboard.py's /retry each spawned their own raw thread
+# into generate_liked_materials/retry_generation, which also hit this same cache, so a
+# private mirror-only executor wasn't enough: two different single-worker pools for the SAME
+# user can still race each other on that user's cached service.
 
 
 def _fire_mirror(user: str, fn) -> None:
-    BACKGROUND_EXECUTOR.submit(_mirror_worker, user, fn)
+    submit_for_user(user, _mirror_worker, user, fn)
 
 
 def _mirror_create(user: str, tab: str, fields: dict) -> None:
