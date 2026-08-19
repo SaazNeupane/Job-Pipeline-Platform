@@ -10,6 +10,7 @@ bcrypt
 pyjwt
 python-multipart
 requests
+dnspython
 reportlab
 pypdf
 google-auth

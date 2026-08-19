@@ -33,6 +33,7 @@ def _patch_collaborators(monkeypatch, *, send_raises: bool):
     monkeypatch.setattr(cold_email, "get_cold_email_dedupe_keys", lambda user: set())
     monkeypatch.setattr(cold_email, "count_sent_today", lambda user: 0)
     monkeypatch.setattr(cold_email, "find_contact", lambda posting: _FakeContact())
+    monkeypatch.setattr(cold_email, "_domain_accepts_mail", lambda domain: True)
     monkeypatch.setattr(cold_email, "record_cold_email", lambda user, fields: None)
     monkeypatch.setattr(cold_email, "record_cold_email_dedupe_backup", lambda key: None)
 

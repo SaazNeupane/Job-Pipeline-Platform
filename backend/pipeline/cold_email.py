@@ -59,6 +59,8 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
+import dns.exception
+import dns.resolver
 import requests
 
 from pipeline.config import load_secrets
@@ -70,7 +72,14 @@ from pipeline.sheet_log import record_cold_email_dedupe_backup
 from pipeline.text_match import word_boundary_match
 from pipeline.writing_style import DEFAULT_MODEL_FALLBACKS, STYLE_RULES, generate_with_gemini
 
-COMPANY_SITE_LOOKUP_MAX_ATTEMPTS_PER_RUN = 10
+# Was 10 -- confirmed live (2026-08-16 daily run) that a real run attempted all 10 and
+# resolved 0 contacts, capping the entire cold-email funnel at contacts_found=0 regardless
+# of how many eligible postings existed. Raised to 25: each attempt is a real network fetch
+# (REQUEST_TIMEOUT_SECONDS=15s worst case), so this adds up to ~6 minutes worst-case to a
+# run rather than ~2.5 -- real cost on Render's free tier, but the alternative is the
+# cold-email funnel structurally never finding anyone. Revisit if run duration becomes the
+# bottleneck instead.
+COMPANY_SITE_LOOKUP_MAX_ATTEMPTS_PER_RUN = 25
 # Landing pages this large are almost never a small company's own contact
 # page (they're another ATS's own multi-posting board, a redirect
 # intermediary, etc.) — skip scanning them, not worth the false-positive
@@ -242,6 +251,30 @@ def find_contact_via_company_site(posting) -> ContactMatch | None:
     text = _strip_html(response.text)[:COMPANY_SITE_MAX_TEXT_CHARS]
     email = _first_real_contact_email(text)
     return ContactMatch(email=email) if email else None
+
+
+# Real found emails still bounce on a dead/typo'd domain -- checking MX before sending is
+# not the same as guessing an address (see this module's own docstring on why guessing is
+# banned): the email itself is always real text found on a real page, this just filters out
+# ones whose domain can't receive mail at all before they cost a bounce against the sending
+# account's reputation. Cached per run since the same company domain repeats across
+# postings/candidates. A definitive negative (NXDOMAIN/NoAnswer) is trusted; any other DNS
+# error (timeout, resolver hiccup) fails OPEN -- a flaky lookup shouldn't drop a genuinely
+# real contact, same "don't punish a data gap" philosophy as filter.py's own fail-open checks.
+_MX_LOOKUP_TIMEOUT_SECONDS = 3
+_mx_cache: dict[str, bool] = {}
+
+
+def _domain_accepts_mail(domain: str) -> bool:
+    if domain not in _mx_cache:
+        try:
+            answers = dns.resolver.resolve(domain, "MX", lifetime=_MX_LOOKUP_TIMEOUT_SECONDS)
+            _mx_cache[domain] = len(answers) > 0
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            _mx_cache[domain] = False
+        except dns.exception.DNSException:
+            _mx_cache[domain] = True
+    return _mx_cache[domain]
 
 
 def _resume_facts_block(resume: dict) -> str:
@@ -474,6 +507,10 @@ def _send_cold_emails(user: str, profile, candidates: list[tuple]) -> dict:
             company_site_lookups_used += 1
             contact = find_contact_via_company_site(posting)
         if contact is None:
+            continue
+        domain = contact.email.rsplit("@", 1)[-1]
+        if not _domain_accepts_mail(domain):
+            print(f"[cold_email] {posting.dedupe_key()}: {contact.email} domain has no mail server, skipping")
             continue
         contacts_found += 1
 
