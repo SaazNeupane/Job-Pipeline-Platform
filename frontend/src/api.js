@@ -133,6 +133,7 @@ export const api = {
   promote: (postingKey) => post(`/api/dashboard/promote/${encodeURIComponent(postingKey)}`),
   dismiss: (postingKey) => post(`/api/dashboard/dismiss/${encodeURIComponent(postingKey)}`),
   retry: (postingKey) => post(`/api/dashboard/retry/${encodeURIComponent(postingKey)}`),
+  setOutcome: (postingKey, outcome) => post(`/api/dashboard/outcome/${encodeURIComponent(postingKey)}`, { outcome }),
   dismissBulk: (postingKeys) => post("/api/dashboard/dismiss-bulk", { posting_keys: postingKeys }),
   runNow: (overrides) => post("/api/run-now", overrides || {}),
 };

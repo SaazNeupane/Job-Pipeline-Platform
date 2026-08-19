@@ -14,7 +14,14 @@ from app.routers._dashboard_helpers import group_by_lane, lane_label
 from pipeline.config import load_profile, load_secrets
 from pipeline.dismiss_application import dismiss_application, dismiss_applications
 from pipeline.google_auth import submit_for_user
-from pipeline.postings_store import get_cold_emails, get_daily_summaries, get_postings_multi
+from pipeline.postings_store import (
+    OUTCOME_VALUES,
+    get_cold_emails,
+    get_daily_summaries,
+    get_outcome_stats,
+    get_postings_multi,
+    set_posting_outcome,
+)
 from pipeline.promote_application import promote_application
 from pipeline.swipe_actions import generate_liked_materials, retry_generation
 
@@ -57,6 +64,7 @@ def dashboard(user: User = Depends(get_current_user)):
             "adzuna": not (secrets.get("ADZUNA_APP_ID") and secrets.get("ADZUNA_APP_KEY")),
             "gemini": not secrets.get("GEMINI_API_KEY"),
         },
+        "outcome_stats": get_outcome_stats(user.id),
     }
 
 
@@ -70,6 +78,17 @@ def promote(posting_key: str, user: User = Depends(get_current_user)):
 def dismiss(posting_key: str, user: User = Depends(get_current_user)):
     dismiss_application(user.id, posting_key)
     return {"ok": True}
+
+
+@router.post("/outcome/{posting_key:path}")
+def set_outcome(posting_key: str, body: dict, user: User = Depends(get_current_user)):
+    outcome = body.get("outcome", "")
+    if outcome not in OUTCOME_VALUES:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"outcome must be one of {sorted(OUTCOME_VALUES)}")
+    row = set_posting_outcome(user.id, posting_key, outcome)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such posting")
+    return {"ok": True, "row": row}
 
 
 @router.post("/dismiss-bulk")

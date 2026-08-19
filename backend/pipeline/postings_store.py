@@ -70,8 +70,10 @@ _POSTING_COLUMNS = [
     "application_url", "description_text", "matched_terms", "match_score", "posted_date", "remote_type",
     "employment_type", "salary_min", "salary_max", "required_years", "reason_held",
     "resume_version", "resume_link", "cover_letter", "content_flags", "application_status",
-    "contact_emailed", "email_sent_at", "dismissed_at", "notes",
+    "contact_emailed", "email_sent_at", "dismissed_at", "notes", "outcome", "outcome_updated_at",
 ]
+
+OUTCOME_VALUES = {"", "responded", "interview", "offer", "rejected"}
 
 
 def _posting_to_dict(row: PostingRow) -> dict:
@@ -266,6 +268,49 @@ def update_posting(user: str, posting_key: str, updates: dict) -> dict | None:
 
     _mirror_update(user, TAB_BY_STATUS[row.status], posting_key, updates)
     return result
+
+
+def set_posting_outcome(user: str, posting_key: str, outcome: str) -> dict | None:
+    """outcome must be one of OUTCOME_VALUES -- validated by the caller (the route), not
+    here, so this stays a plain data-layer write like every other function in this file."""
+    return update_posting(user, posting_key, {"outcome": outcome, "outcome_updated_at": utcnow().isoformat(timespec="seconds")})
+
+
+def get_outcome_stats(user: str) -> dict:
+    """Interviews/responses per application, grouped by lane and by source -- the
+    foundational metric behind any "quality over quantity" claim (see Posting.outcome's own
+    docstring). Only counts postings that ever reached "applied" or later (queued/pending
+    postings haven't been decided on yet, dismissed ones were never applied to) --
+    PostingRow.status alone isn't enough since a posting can be dismissed AFTER being
+    applied to in principle, so this counts anything with a non-empty application_status
+    (only ever set once a posting is promoted to applied) rather than filtering on
+    status == "applied", which would undercount."""
+    db = _require_session()
+    rows = (
+        db.query(PostingRow.lane, PostingRow.source, PostingRow.outcome)
+        .filter(PostingRow.user_id == user, PostingRow.application_status != "")
+        .all()
+    )
+
+    def _bucket(rows_subset) -> dict:
+        total = len(rows_subset)
+        counts = {"responded": 0, "interview": 0, "offer": 0, "rejected": 0}
+        for _, _, outcome in rows_subset:
+            if outcome in counts:
+                counts[outcome] += 1
+        return {"applied": total, **counts}
+
+    by_lane: dict[str, list] = {}
+    by_source: dict[str, list] = {}
+    for lane, source, outcome in rows:
+        by_lane.setdefault(lane or "unknown", []).append((lane, source, outcome))
+        by_source.setdefault(source or "unknown", []).append((lane, source, outcome))
+
+    return {
+        "overall": _bucket(rows),
+        "by_lane": {lane: _bucket(subset) for lane, subset in by_lane.items()},
+        "by_source": {source: _bucket(subset) for source, subset in by_source.items()},
+    }
 
 
 def dismiss_postings_bulk(user: str, posting_keys: list[str]) -> int:

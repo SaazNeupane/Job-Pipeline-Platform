@@ -36,7 +36,15 @@ function matchPercent(score) {
   return Math.round(Number(score) * 100);
 }
 
-function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRetry, open, onToggleOpen, applied, busy }) {
+const OUTCOME_LABELS = {
+  "": "No response yet",
+  responded: "Got a response",
+  interview: "Interview",
+  offer: "Offer",
+  rejected: "Rejected",
+};
+
+function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRetry, onSetOutcome, open, onToggleOpen, applied, busy }) {
   const generating = row.reason_held === "generating";
   const failed = (row.reason_held || "").startsWith("generation_failed");
   const match = matchPercent(row.match_score);
@@ -71,6 +79,18 @@ function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRe
             {row.location && <span className="badge">{row.location}</span>}
             {row.required_years && <span className="badge">{row.required_years}+ yrs exp</span>}
             {applied && <span className="badge pine">{row.application_status}</span>}
+            {applied && onSetOutcome && (
+              <select
+                className="outcome-select"
+                value={row.outcome || ""}
+                disabled={busy === "outcome"}
+                onChange={(e) => onSetOutcome(e.target.value)}
+              >
+                {Object.entries(OUTCOME_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            )}
             <span className="hint">
               {applied ? "applied" : "found"} {row.date}
               {row.posted_date ? ` · posted ${row.posted_date.slice(0, 10)}` : ""}
@@ -341,6 +361,17 @@ export default function Dashboard() {
       setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
     }
   }
+  async function setOutcome(key, outcome) {
+    setBusyRows((prev) => ({ ...prev, [key]: "outcome" }));
+    try {
+      await api.setOutcome(key, outcome);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyRows((prev) => { const next = { ...prev }; delete next[key]; return next; });
+    }
+  }
   async function doDismiss(key) {
     setBusyRows((prev) => ({ ...prev, [key]: "dismiss" }));
     try {
@@ -473,6 +504,16 @@ export default function Dashboard() {
           <div className="stat-strip">
             <StatItem icon={<InboxIcon />} label="Needs review" value={data.pending.length} tone="signal" />
             <StatItem icon={<CheckCircleIcon />} label="Applied" value={data.applied.length} tone="pine" />
+            <StatItem
+              icon={<CheckCircleIcon />}
+              label="Interview rate"
+              value={
+                data.outcome_stats?.overall?.applied
+                  ? `${Math.round((data.outcome_stats.overall.interview / data.outcome_stats.overall.applied) * 100)}%`
+                  : "—"
+              }
+              tone="signal"
+            />
             <StatItem icon={<MailIcon />} label="Cold emails" value={data.cold_emails.length} to="/cold-email" />
             <StatItem icon={<RunsIcon />} label="Runs logged" value={data.summary.length} />
           </div>
@@ -565,6 +606,8 @@ export default function Dashboard() {
                       key={row.posting_key} row={row} applied
                       open={openDetail === row.posting_key}
                       onToggleOpen={() => setOpenDetail(openDetail === row.posting_key ? null : row.posting_key)}
+                      onSetOutcome={(outcome) => setOutcome(row.posting_key, outcome)}
+                      busy={busyRows[row.posting_key]}
                     />
                   ))}
                 </div>

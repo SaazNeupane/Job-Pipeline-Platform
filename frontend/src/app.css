@@ -45,6 +45,8 @@
   border-top: 1px solid var(--wire);
 }
 
+.outcome-select { width: auto; padding: 0.3rem 0.55rem; font-size: 0.82rem; }
+
 .legal-page h2 { margin-top: 2rem; }
 .legal-page ul { padding-left: 1.25rem; }
 .legal-page li { margin-bottom: 0.4rem; }

@@ -158,6 +158,16 @@ class Posting(Base):
     contact_emailed: Mapped[str] = mapped_column(String, default="")
     email_sent_at: Mapped[str] = mapped_column(String, default="")
 
+    # Self-reported outcome, set by the user after applying -- "" (no response yet) |
+    # "responded" | "interview" | "offer" | "rejected". This app has no way to detect
+    # outcomes automatically (would mean scanning the user's inbox for arbitrary company
+    # replies, well past what gmail.readonly's bounce/reply-checking scope is used for
+    # today) -- self-report is the only honest source for this. It's the foundational
+    # metric behind any "quality over quantity" claim: without interviews/responses per
+    # application tracked somewhere, that claim is just marketing.
+    outcome: Mapped[str] = mapped_column(String, default="")
+    outcome_updated_at: Mapped[str] = mapped_column(String, default="")
+
     dismissed_at: Mapped[str] = mapped_column(String, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
 
