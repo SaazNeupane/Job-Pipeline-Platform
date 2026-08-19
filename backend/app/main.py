@@ -18,7 +18,7 @@ import uuid
 
 import jwt
 
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
@@ -34,6 +34,7 @@ from app.auth import create_access_token, get_current_user, hash_password, verif
 from app.db import SessionLocal, get_db
 from app.models import Invite, Profile, User
 from app.rate_limit import rate_limit
+from app.time_utils import utcnow
 from app.routers import dashboard as dashboard_router
 from app.routers import swipe as swipe_router
 from app.routers import wizard as wizard_router
@@ -169,7 +170,7 @@ def signup(body: SignupRequest, background_tasks: BackgroundTasks, db: Session =
     user = User(id=str(uuid.uuid4()), email=body.email, password_hash=hash_password(body.password))
     db.add(user)
     db.flush()  # user row must exist before invite's FK update below
-    invite.used_at = datetime.utcnow()
+    invite.used_at = utcnow()
     invite.used_by_user_id = user.id
     db.commit()
     # Best-effort, never blocks signup -- see pipeline/email_send.py's own no-op-if-
@@ -369,7 +370,7 @@ def active_users(db: Session = Depends(get_db)):
     naturally catch up instead."""
     from app.models import DailySummary
 
-    now = datetime.utcnow()
+    now = utcnow()
     today = now.date().isoformat()
     already_ran_today = (
         db.query(DailySummary.user_id).filter(DailySummary.date == today).subquery()

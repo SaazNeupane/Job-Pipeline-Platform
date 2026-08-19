@@ -14,12 +14,12 @@ access, carried over from the Sheets-tab era, doesn't need to change."""
 
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
 
 from app.models import ColdEmail as ColdEmailRow
 from app.models import DailySummary as DailySummaryRow
 from app.models import Posting as PostingRow
+from app.time_utils import utcnow
 from pipeline.config import _require_session, load_profile
 from pipeline.filter import posting_fingerprint
 from pipeline.google_auth import submit_for_user
@@ -213,7 +213,7 @@ def create_posting(user: str, status: str, fields: dict) -> dict:
     db = _require_session()
     row = PostingRow(
         user_id=user, status=status,
-        status_history=[{"status": status, "at": datetime.utcnow().isoformat()}],
+        status_history=[{"status": status, "at": utcnow().isoformat()}],
         **{k: v for k, v in fields.items() if k in _POSTING_COLUMNS and k not in ("status", "posting_key")},
         posting_key=fields["posting_key"],
     )
@@ -239,7 +239,7 @@ def transition_posting(user: str, posting_key: str, new_status: str, updates: di
     new_tab = TAB_BY_STATUS[new_status]
 
     row.status = new_status
-    row.status_history = [*(row.status_history or []), {"status": new_status, "at": datetime.utcnow().isoformat()}]
+    row.status_history = [*(row.status_history or []), {"status": new_status, "at": utcnow().isoformat()}]
     for key, value in (updates or {}).items():
         if key in _POSTING_COLUMNS and key not in ("status", "posting_key"):
             setattr(row, key, value)
@@ -278,7 +278,7 @@ def dismiss_postings_bulk(user: str, posting_keys: list[str]) -> int:
     if not rows:
         return 0
 
-    now = datetime.utcnow().isoformat(timespec="seconds")
+    now = utcnow().isoformat(timespec="seconds")
     fields_by_key = {}
     for row in rows:
         row.status = "dismissed"

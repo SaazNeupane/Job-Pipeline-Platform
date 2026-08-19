@@ -14,6 +14,7 @@ from sqlalchemy import Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+from app.time_utils import utcnow
 
 
 def _uuid() -> str:
@@ -26,7 +27,7 @@ class User(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -68,7 +69,7 @@ class Profile(Base):
     # per-user resume_<lane>.json files -- see pipeline/config.py's Profile.resumes docstring.
     resumes_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     user: Mapped["User"] = relationship(back_populates="profile")
 
@@ -85,7 +86,7 @@ class OAuthCredential(Base):
     scopes: Mapped[str] = mapped_column(String, default="")  # space-joined, as Google returns
     refresh_token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
     granted_email: Mapped[str] = mapped_column(String, default="")  # which Google account granted this
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     user: Mapped["User"] = relationship(back_populates="oauth_credentials")
 
@@ -162,8 +163,8 @@ class Posting(Base):
 
     status_history: Mapped[list] = mapped_column(JSON, default=list)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class ColdEmail(Base):
@@ -232,7 +233,7 @@ class Invite(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     code: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     used_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
@@ -245,6 +246,6 @@ class WizardDraft(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
     draft_json: Mapped[dict] = mapped_column(JSON, default=dict)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     user: Mapped["User"] = relationship(back_populates="wizard_draft")

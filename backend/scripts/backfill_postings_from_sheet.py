@@ -11,10 +11,10 @@ Usage (from backend/):
 from __future__ import annotations
 
 import sys
-from datetime import datetime
 
 from app.db import SessionLocal
 from app.models import ColdEmail, DailySummary, Posting, User
+from app.time_utils import utcnow
 from pipeline import config as pipeline_config
 from pipeline import sheet_log
 
@@ -64,7 +64,7 @@ def _backfill_postings(db, user_id: str) -> None:
 
             db.add(Posting(
                 user_id=user_id, status=status,
-                status_history=[{"status": status, "at": datetime.utcnow().isoformat()}],
+                status_history=[{"status": status, "at": utcnow().isoformat()}],
                 **fields,
             ))
             inserted += 1
