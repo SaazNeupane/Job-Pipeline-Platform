@@ -168,6 +168,13 @@ class Posting(Base):
     outcome: Mapped[str] = mapped_column(String, default="")
     outcome_updated_at: Mapped[str] = mapped_column(String, default="")
 
+    # 1-2 sentence "why this fits your background" explanation, generated on demand (not
+    # eagerly for every queued posting -- same lazy-generation philosophy as resume/cover
+    # letter, see swipe_actions.queue_for_swipe's own docstring: a posting the user never
+    # looks twice at shouldn't burn an LLM call). Cached here once generated so re-viewing
+    # the same posting doesn't re-call Gemini.
+    fit_reason: Mapped[str] = mapped_column(Text, default="")
+
     dismissed_at: Mapped[str] = mapped_column(String, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
 

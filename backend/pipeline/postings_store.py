@@ -71,6 +71,7 @@ _POSTING_COLUMNS = [
     "employment_type", "salary_min", "salary_max", "required_years", "reason_held",
     "resume_version", "resume_link", "cover_letter", "content_flags", "application_status",
     "contact_emailed", "email_sent_at", "dismissed_at", "notes", "outcome", "outcome_updated_at",
+    "fit_reason",
 ]
 
 OUTCOME_VALUES = {"", "responded", "interview", "offer", "rejected"}

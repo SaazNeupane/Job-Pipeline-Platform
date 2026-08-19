@@ -126,6 +126,7 @@ export const api = {
   swipeQueue: () => get("/api/swipe/queue"),
   swipeLike: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/like`),
   swipeReject: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/reject`),
+  explainMatch: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/explain`),
   addManualPosting: (lane, text, url) => post("/api/swipe/manual", { lane, text, url }),
 
   // -- dashboard --

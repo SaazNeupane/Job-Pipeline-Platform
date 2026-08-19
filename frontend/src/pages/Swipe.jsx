@@ -18,7 +18,7 @@ function matchPercent(score) {
   return Math.round(Number(score) * 100);
 }
 
-function SwipeCard({ row, laneLabels, exiting, entering }) {
+function SwipeCard({ row, laneLabels, exiting, entering, onExplain, explaining }) {
   const terms = (row.matched_terms || "").split(",").filter(Boolean);
   const flags = (row.content_flags || "").split("; ").filter(Boolean);
   const salary = money(row.salary_min, row.salary_max);
@@ -45,6 +45,13 @@ function SwipeCard({ row, laneLabels, exiting, entering }) {
         <div className="swipe-card-terms">
           {terms.map((t) => <span key={t} className="badge amber">{t}</span>)}
         </div>
+      )}
+      {row.fit_reason ? (
+        <p className="fit-reason">{row.fit_reason}</p>
+      ) : (
+        <button type="button" className="ghost fit-reason-btn" onClick={onExplain} disabled={explaining}>
+          {explaining ? "Thinking…" : "Why this fits →"}
+        </button>
       )}
       {flags.length > 0 && (
         <div className="swipe-card-terms">
@@ -84,6 +91,7 @@ export default function Swipe() {
   const [exiting, setExiting] = useState(null); // null | "like" | "reject"
   const [entering, setEntering] = useState(false);
   const [lastLiked, setLastLiked] = useState(null);
+  const [explainingKey, setExplainingKey] = useState(null);
   // Reversible view filter, not a destructive action -- adjust freely (look
   // at 70%+, then widen to 50%+) without ever changing what's actually
   // queued. Postings below the threshold are hidden, not dismissed.
@@ -140,6 +148,21 @@ export default function Swipe() {
   const like = () => decide("like");
   const reject = () => decide("reject");
 
+  function explainCurrent() {
+    if (!current || explainingKey) return;
+    const key = current.posting_key;
+    setExplainingKey(key);
+    api.explainMatch(key)
+      .then(({ fit_reason }) => {
+        setData((prev) => ({
+          ...prev,
+          queue: prev.queue.map((row) => (row.posting_key === key ? { ...row, fit_reason } : row)),
+        }));
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setExplainingKey(null));
+  }
+
   useEffect(() => {
     function onKey(e) {
       if (busy || !current) return;
@@ -191,7 +214,10 @@ export default function Swipe() {
           <>
             <div className="swipe-deck">
               {next && <SwipeCardPeek row={next} laneLabels={laneLabels} />}
-              <SwipeCard row={current} laneLabels={laneLabels} exiting={exiting} entering={entering} />
+              <SwipeCard
+                row={current} laneLabels={laneLabels} exiting={exiting} entering={entering}
+                onExplain={explainCurrent} explaining={explainingKey === current.posting_key}
+              />
             </div>
             <div className="swipe-actions">
               <button type="button" className="danger swipe-btn" onClick={reject} disabled={busy}>← Skip</button>

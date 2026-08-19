@@ -972,6 +972,15 @@ tr:last-child td { border-bottom: none; }
 .swipe-card-facts .eyebrow { display: block; margin-bottom: 0.1rem; }
 .swipe-card-terms { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.9rem; }
 .swipe-card-desc { color: var(--ink-soft); font-size: 0.88rem; line-height: 1.5; margin: 0.9rem 0; }
+.fit-reason {
+  color: var(--redline-strong);
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin: 0 0 0.9rem;
+  padding: 0.6rem 0.8rem;
+  border-left: 2px solid var(--redline-soft);
+}
+.fit-reason-btn { margin-bottom: 0.9rem; font-size: 0.86rem; }
 .swipe-actions { display: flex; gap: 1rem; width: 100%; }
 .swipe-btn { flex: 1; justify-content: center; font-size: 1rem; padding: 0.8rem 1rem; }
 .swipe-hint { margin: 0; }

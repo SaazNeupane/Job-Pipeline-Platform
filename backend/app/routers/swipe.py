@@ -8,13 +8,20 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user
 from app.models import User
+from app.rate_limit import rate_limit
 from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_first
 from pipeline.config import load_profile
+from pipeline.fit_reason import generate_fit_reason
 from pipeline.google_auth import submit_for_user
-from pipeline.postings_store import get_postings
-from pipeline.swipe_actions import add_manual_posting, generate_liked_materials, queue_like, reject_posting
+from pipeline.postings_store import get_posting, get_postings, update_posting
+from pipeline.swipe_actions import _posting_from_row, add_manual_posting, generate_liked_materials, queue_like, reject_posting
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
+
+# User-triggered relay to Gemini (their own key/quota) -- self-limiting in practice since
+# it's one click per posting a person actually looks at, but bounded anyway against a
+# scripted loop the same way geocode's own limiter is.
+_rate_limit_explain = rate_limit(20, 60)
 
 
 @router.get("/queue")
@@ -89,6 +96,43 @@ def like(posting_key: str, user: User = Depends(get_current_user)):
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
     submit_for_user(user.id, _generate_in_background, user.id, match)
     return {"ok": True, "row": {"company": match.get("company", ""), "role": match.get("role", "")}}
+
+
+@router.post("/{posting_key:path}/explain", dependencies=[Depends(_rate_limit_explain)])
+def explain(posting_key: str, user: User = Depends(get_current_user)):
+    """Generates (or returns the cached) "why this fits" reasoning for a queued posting --
+    on demand, not eagerly for every queued posting, same lazy-generation philosophy as
+    resume/cover-letter (see fit_reason.py's own module docstring)."""
+    row = get_posting(user.id, posting_key)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such posting")
+    if row.get("fit_reason"):
+        return {"fit_reason": row["fit_reason"]}
+
+    try:
+        profile = load_profile(user.id)
+    except LookupError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No profile found -- finish the setup wizard first.")
+    lane = next((l for l in profile.lanes if l.name == row.get("lane")), None)
+    if lane is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"No lane named {row.get('lane')!r} in your profile.")
+
+    posting = _posting_from_row(row)
+    matched_terms = [t for t in (row.get("matched_terms") or "").split(",") if t]
+    resume = profile.resumes.get(lane.name)
+    if resume is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"No resume built for lane {lane.name!r} yet.")
+
+    try:
+        reason = generate_fit_reason(user.id, resume, posting, matched_terms)
+    except Exception:  # noqa: BLE001 -- surfaced to the user, not a crash
+        import logging
+
+        logging.exception("generate_fit_reason failed for %s", posting_key)
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Couldn't generate an explanation right now. Try again in a moment.")
+
+    update_posting(user.id, posting_key, {"fit_reason": reason})
+    return {"fit_reason": reason}
 
 
 @router.post("/{posting_key:path}/reject")
