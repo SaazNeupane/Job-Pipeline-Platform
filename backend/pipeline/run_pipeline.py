@@ -25,6 +25,7 @@ the dashboard's existing Dismiss action.
 
 from __future__ import annotations
 
+import logging
 import os
 import sys
 
@@ -61,7 +62,7 @@ def run(
         except Exception as exc:  # noqa: BLE001 — deliberately broad, see module docstring
             message = f"{step_name}: {exc}"
             errors.append(message)
-            print(f"[run_pipeline] {message}")
+            logging.error("[run_pipeline] %s", message)
             return None
 
     profile = load_profile(user)
@@ -230,7 +231,15 @@ def run(
     }
     _try("send_daily_report", send_daily_report, user, summary)
 
-    print(f"[run_pipeline] done — {len(errors)} error(s)")
+    if errors:
+        # Errors are swallowed step-by-step on purpose (module docstring) so one bad source
+        # doesn't kill the whole run -- but a run where e.g. all five search sources failed
+        # still needs to look like a failure somewhere visible, not a cheerful "done" print
+        # indistinguishable from a real success. logging.error (not print) is what actually
+        # shows up in Render's captured stdout at a filterable level.
+        logging.error("[run_pipeline] done for %r — %d error(s): %s", user, len(errors), "; ".join(errors))
+    else:
+        print(f"[run_pipeline] done for {user!r} — 0 errors")
 
 
 if __name__ == "__main__":

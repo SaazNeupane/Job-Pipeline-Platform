@@ -42,14 +42,16 @@ from pipeline import google_auth as pipeline_google_auth
 
 # No handler was configured before this -- logging.exception() calls (e.g. the daily-run
 # background task, the OAuth callback) fell back to Python's default "last resort" stderr
-# handler, so a traceback only existed in whatever terminal ran uvicorn. Gone the moment
-# that terminal's scrolled past or closed. File handler here keeps it past that.
-_LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
-_LOG_DIR.mkdir(exist_ok=True)
+# handler, so a traceback only existed in whatever terminal ran uvicorn. A file handler used
+# to sit here too, but backend/logs/app.log on Render is ephemeral -- every deploy and every
+# restart wipes it, which matters double since a restart is exactly when you'd want the
+# evidence of what just crashed. Render already captures stdout/stderr into its own
+# persistent log stream, so a local file adds nothing in production and is just one more
+# thing to remember to check. Stream handler only.
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler(_LOG_DIR / "app.log", encoding="utf-8")],
+    handlers=[logging.StreamHandler()],
 )
 
 app = FastAPI(title="Job Pipeline Platform API")
@@ -354,16 +356,32 @@ def _require_internal_secret(x_internal_secret: str = Header(default="")):
 def active_users(db: Session = Depends(get_db)):
     """Called hourly now (see .github/workflows/daily.yml), not once a day -- each user
     picks their own run_hour_utc in the wizard/settings (Profile.run_hour_utc, default 14
-    to match the old single fixed daily time), and only whoever's hour matches the current
-    UTC hour comes back. The join to Profile also means a user still mid-wizard (no
-    Profile row yet) is naturally excluded here instead of getting attempted on every one
-    of the 24 hourly calls a day for nothing -- _run_pipeline_in_background's own
-    profile-row check stays too, as a second guard, not replaced by this one."""
-    now_hour = datetime.utcnow().hour
+    to match the old single fixed daily time). The join to Profile also means a user still
+    mid-wizard (no Profile row yet) is naturally excluded here instead of getting attempted
+    on every one of the 24 hourly calls a day for nothing -- _run_pipeline_in_background's
+    own profile-row check stays too, as a second guard, not replaced by this one.
+
+    Matches `run_hour_utc <= now_hour` (their hour has passed) AND no DailySummary row for
+    today yet, not `run_hour_utc == now_hour` -- GitHub Actions scheduled runs are
+    best-effort and routinely fire late or get dropped entirely; an exact-hour match means a
+    trigger landing at 15:05 instead of 14:30 silently skips every 14:00 user for the whole
+    day, with no catch-up and no record. This makes the next hourly call after a missed one
+    naturally catch up instead."""
+    from app.models import DailySummary
+
+    now = datetime.utcnow()
+    today = now.date().isoformat()
+    already_ran_today = (
+        db.query(DailySummary.user_id).filter(DailySummary.date == today).subquery()
+    )
     users = (
         db.query(User)
         .join(Profile, Profile.user_id == User.id)
-        .filter(User.active.is_(True), Profile.run_hour_utc == now_hour)
+        .filter(
+            User.active.is_(True),
+            Profile.run_hour_utc <= now.hour,
+            User.id.notin_(db.query(already_ran_today.c.user_id)),
+        )
         .all()
     )
     return {"user_ids": [u.id for u in users]}
