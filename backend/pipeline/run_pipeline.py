@@ -176,11 +176,13 @@ def run(
         for status in ("applied", "pending", "dismissed", "queued"):
             existing_fingerprints |= _try(f"get_existing_fingerprints[{status}]", get_existing_fingerprints, user, status) or set()
 
+    total_matched = 0
     for lane in lanes:
         matches = _try(
             f"filter_postings[{lane.name}]", filter_postings, unique_postings, lane, existing_keys,
             profile.applicant, profile.target_countries, existing_fingerprints, max_age_days,
         )
+        total_matched += len(matches or [])
         if not matches:
             continue
         print(f"[run_pipeline] {lane.name}: {len(matches)} matches after filter/dedupe")
@@ -192,7 +194,7 @@ def run(
         # for a swipe per lane per run, not how many get auto-applied to —
         # same field/semantics repurposed rather than adding a new profile
         # setting for what's functionally the same "don't flood one run" cap.
-        queue_matches = sorted(matches, key=lambda m: len(m[1]), reverse=True)[:profile.apply_daily_cap]
+        queue_matches = sorted(matches, key=lambda m: m[2], reverse=True)[:profile.apply_daily_cap]
         print(f"[run_pipeline] {lane.name}: queuing {len(queue_matches)} for swipe (apply_daily_cap={profile.apply_daily_cap})")
 
         _try(f"queue_for_swipe[{lane.name}]", queue_for_swipe, user, lane, queue_matches)
@@ -202,10 +204,10 @@ def run(
         # would get queued a second time under the next lane in this same
         # run, since the sheet write above doesn't retroactively appear in
         # a variable already sitting in memory. Real bug, found live.
-        existing_keys = existing_keys | {posting.dedupe_key() for posting, _ in queue_matches}
+        existing_keys = existing_keys | {posting.dedupe_key() for posting, _, _ in queue_matches}
         existing_fingerprints = existing_fingerprints | {
             posting_fingerprint(posting.source, posting.company, posting.title, posting.location)
-            for posting, _ in queue_matches
+            for posting, _, _ in queue_matches
         }
 
     # Cold email now runs its own search (Adzuna/hiring.cafe, not the
@@ -219,9 +221,11 @@ def run(
     if deleted_count:
         print(f"[run_pipeline] cleanup_old_files: deleted {deleted_count} resume(s) older than 7 days")
 
-    summary = _try("build_daily_summary", build_daily_summary, user, None, errors, cold_email_stats) or {
+    run_stats = {"total_postings_found": len(unique_postings), "total_matched": total_matched}
+    summary = _try("build_daily_summary", build_daily_summary, user, None, errors, cold_email_stats, run_stats) or {
         "date": "", "queued_count": 0, "awaiting_apply_count": 0, "applied_count": 0, "emails_sent": 0,
         "cold_email_scanned": 0, "cold_email_eligible": 0, "cold_email_matched": 0, "cold_email_contacts_found": 0,
+        "total_postings_found": 0, "total_matched": 0,
         "errors": errors,
     }
     _try("send_daily_report", send_daily_report, user, summary)

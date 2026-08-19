@@ -152,17 +152,56 @@ def _posting_specific_terms(resume: dict, posting_text: str) -> list[str]:
 def _build_headline(posting_title: str, terms: list[str]) -> str:
     """Plain "Target Role | skill, skill, skill" line — deliberately not a
     sentence, so there's no prose to sound AI-generated, and no dash/em-dash
-    connector, just a pipe."""
+    connector, just a pipe. Terms already contained in posting_title itself
+    are dropped — real bug, found live: a term like "IT support" surviving
+    into the term list for a posting titled "IT Support Analyst" produced
+    "IT Support Analyst | IT support", which reads as the same title stated
+    twice rather than the headline's real purpose (naming skills BEYOND the
+    title itself)."""
     if not posting_title:
         return ""
     deduped: list[str] = []
     for term in terms:
-        if term.lower() not in {t.lower() for t in deduped}:
-            deduped.append(term)
+        if term.lower() in {t.lower() for t in deduped}:
+            continue
+        if word_boundary_match(term.lower(), posting_title.lower()):
+            continue
+        deduped.append(term)
     top_terms = deduped[:MAX_HEADLINE_TERMS]
     if not top_terms:
         return posting_title
     return f"{posting_title} | {', '.join(top_terms)}"
+
+
+def _resume_text(tailored: dict) -> str:
+    """Flattens every place a required term could legitimately land — title,
+    headline, all bullets (relevant + additional), skills — into one
+    lowercased haystack for a single word-boundary presence check."""
+    parts = [tailored.get("headline", "")]
+    experience = tailored.get("experience", {})
+    for bucket in ("relevant", "additional"):
+        for entry in experience.get(bucket, []):
+            parts.append(entry.get("title", ""))
+            parts.extend(entry.get("bullets", []))
+    for items in tailored.get("skills", {}).values():
+        parts.extend(items)
+    return " ".join(parts).lower()
+
+
+def _flag_unmatched_keywords(tailored: dict, matched_terms: list[str]) -> None:
+    """`_rephrase_text` above already guarantees a matched term lands
+    verbatim wherever a lane.synonym_groups member for it exists anywhere on
+    the resume — this only catches the remaining case: a term the posting
+    wants that has no synonym-equivalent anywhere on the resume at all, so
+    nothing could be substituted. Deliberately never invents content to
+    close that gap (same "never invent" contract as reword_bullets_with_llm)
+    — just surfaces it via content_flags so it's visible instead of silent."""
+    haystack = _resume_text(tailored)
+    missing = [t for t in matched_terms if not word_boundary_match(t.lower(), haystack)]
+    if missing:
+        tailored.setdefault("content_flags", []).append(
+            "ATS keyword gap (no synonym on resume to substitute, left as-is): " + ", ".join(missing)
+        )
 
 
 def tailor_resume(
@@ -222,6 +261,7 @@ def tailor_resume(
         tailored["skills"] = dict(ordered_categories)
 
     tailored["headline"] = _build_headline(posting_title, reorder_terms)
+    _flag_unmatched_keywords(tailored, matched_terms)
 
     return tailored
 
@@ -604,21 +644,22 @@ _FONT_SCALE_STEPS = [1.15, 1.08, 1.0, 0.93, 0.87]
 # Real numbers behind this ladder, tested live against an actual 5-job,
 # 2-project resume (2026-08-06): trimming bullet COUNT alone never freed
 # enough space on its own (even capping every entry to 2 bullets, with
-# projects AND interests already dropped, still didn't fit one page) — the
-# real bottleneck is structural (a header/dates row + spacer per entry,
-# not just bullets), so which SECTIONS and which historical entries appear
-# at all is what actually closes the gap. Dropping "additional" experience
-# ENTIRELY is the last resort, not the first one — a resume that shows 1-2
-# lower-priority jobs briefly is more complete than one that erases that
-# whole chapter of work history just to protect an interests line.
+# additional experience AND interests already dropped, still didn't fit one
+# page) — the real bottleneck is structural (a header/dates row + spacer per
+# entry, not just bullets), so which SECTIONS and which historical entries
+# appear at all is what actually closes the gap. "additional" experience
+# (older/lower-priority roles) is dropped before PROJECTS, not after —
+# explicit user decision (2026-08-18): projects are curated, deliberately
+# chosen work; additional experience is whatever didn't make "relevant."
+# Dropping PROJECTS entirely is the true last resort now.
 _CONTENT_LEVELS: list[tuple[int | None, int | None, list[str]]] = [
     (None, None, []),
     (None, None, ["interests"]),
-    (None, None, ["interests", "projects"]),
-    (5, None, ["interests", "projects"]),
-    (4, 2, ["interests", "projects"]),
-    (3, 1, ["interests", "projects"]),
-    (2, None, ["interests", "projects", "additional"]),
+    (None, None, ["interests", "additional"]),
+    (5, None, ["interests", "additional"]),
+    (4, None, ["interests", "additional"]),
+    (3, None, ["interests", "additional"]),
+    (2, None, ["interests", "additional", "projects"]),
 ]
 
 
@@ -662,6 +703,15 @@ def _build_styles(scale: float) -> dict[str, ParagraphStyle]:
         # larger than the text next to it. Tying it to the same scale
         # factor, at roughly half the body font size, keeps it a small dot.
         "bullet_size": 5 * scale,
+        # ReportLab positions a ListItem's bullet glyph using its own
+        # ascent, not aligned to the adjacent Paragraph's baseline — with
+        # bullet_size this much smaller than the body text's leading, the
+        # bullet draws visibly higher than the text next to it. -4.2165 per
+        # unit scale is an exact, zero-residual constant (confirmed by
+        # measuring real glyph bounding boxes in rendered PDFs at every one
+        # of render_resume_pdf's actual _FONT_SCALE_STEPS — bullet and text
+        # vertical centers matched to sub-0.01pt at all five, not just one).
+        "bullet_offset_y": -4.2165 * scale,
         "spacer": 6 * scale,
     }
 
@@ -679,6 +729,7 @@ def _bullet_list(bullets: list[str], styles: dict) -> ListFlowable:
     return ListFlowable(
         [ListItem(Paragraph(b, styles["bullet"]), leftIndent=12) for b in bullets],
         bulletType="bullet", start="circle", leftIndent=12, bulletFontSize=styles["bullet_size"],
+        bulletOffsetY=styles["bullet_offset_y"],
     )
 
 
@@ -702,20 +753,24 @@ def _build_story(resume: dict, styles: dict, drop_sections: list[str]) -> list:
         styles["contact"],
     ))
 
-    story.append(Paragraph("EDUCATION", styles["section"]))
-    for edu in resume["education"]:
-        story.append(_header_row(edu["institution"], edu["location"], styles))
-        story.append(_header_row(f'{edu["credential"]} | GPA: {edu["gpa"]}', edu["dates"], styles, left_style_key="body"))
-        if edu.get("highlights"):
-            story.append(_bullet_list(edu["highlights"], styles))
-        story.append(Spacer(1, spacer))
+    education = resume.get("education")
+    if education:
+        story.append(Paragraph("EDUCATION", styles["section"]))
+        for edu in education:
+            story.append(_header_row(edu["institution"], edu["location"], styles))
+            story.append(_header_row(f'{edu["credential"]} | GPA: {edu["gpa"]}', edu["dates"], styles, left_style_key="body"))
+            if edu.get("highlights"):
+                story.append(_bullet_list(edu["highlights"], styles))
+            story.append(Spacer(1, spacer))
 
-    story.append(Paragraph("RELEVANT EXPERIENCE", styles["section"]))
-    for entry in resume["experience"]["relevant"]:
-        story.append(_header_row(_entry_header_left(entry), entry["location"], styles))
-        story.append(_header_row("", entry["dates"], styles, left_style_key="body"))
-        story.append(_bullet_list(entry["bullets"], styles))
-        story.append(Spacer(1, spacer))
+    relevant = resume["experience"]["relevant"]
+    if relevant:
+        story.append(Paragraph("RELEVANT EXPERIENCE" if resume["experience"].get("additional") else "EXPERIENCE", styles["section"]))
+        for entry in relevant:
+            story.append(_header_row(_entry_header_left(entry), entry["location"], styles))
+            story.append(_header_row("", entry["dates"], styles, left_style_key="body"))
+            story.append(_bullet_list(entry["bullets"], styles))
+            story.append(Spacer(1, spacer))
 
     additional = resume["experience"].get("additional") if "additional" not in drop_sections else None
     if additional:
@@ -734,10 +789,12 @@ def _build_story(resume: dict, styles: dict, drop_sections: list[str]) -> list:
             story.append(_bullet_list(project["bullets"], styles))
             story.append(Spacer(1, spacer))
 
-    story.append(Paragraph("SKILLS", styles["section"]))
-    for category, items in resume["skills"].items():
-        label = category.replace("_", " ").title()
-        story.append(Paragraph(f"<b>{label}:</b> {', '.join(items)}", styles["body"]))
+    skills = resume.get("skills")
+    if skills:
+        story.append(Paragraph("SKILLS", styles["section"]))
+        for category, items in skills.items():
+            label = category.replace("_", " ").title()
+            story.append(Paragraph(f"<b>{label}:</b> {', '.join(items)}", styles["body"]))
 
     interests = resume.get("interests") if "interests" not in drop_sections else None
     if interests:
@@ -793,8 +850,14 @@ def render_resume_pdf(resume: dict, output_path: Path) -> list[str]:
             doc.build(story)
             last_doc = doc
             if doc.page <= 1:
-                flag = _content_level_flag(max_bullets, max_additional_entries, drop_sections)
-                return [flag] if flag else []
+                # Page-trim content_flags disabled per explicit user request
+                # (2026-08-18) -- the message was noisy/unwanted in the
+                # Dashboard/Swipe UI. Trimming itself still happens exactly
+                # as before; only the user-visible flag is suppressed.
+                # flag = _content_level_flag(max_bullets, max_additional_entries, drop_sections)
+                # return [flag] if flag else []
+                return []
 
     print(f"[tailor_resume] render_resume_pdf: could not fit one page even at the most-trimmed content level/smallest scale ({last_doc.page} pages) — left the most-trimmed render in place")
-    return [f"resume did not fit one page even at the most-trimmed content level ({last_doc.page} pages) — kept the most-trimmed render"]
+    # return [f"resume did not fit one page even at the most-trimmed content level ({last_doc.page} pages) — kept the most-trimmed render"]
+    return []

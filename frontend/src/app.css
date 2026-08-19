@@ -602,6 +602,19 @@ legend {
 
 /* Wizard layout ------------------------------------------------------------ */
 .wizard-shell { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 3rem; align-items: start; }
+/* min-width:0 overrides the grid item default of min-width:auto, which
+   refuses to shrink below its content's natural width -- without it, long
+   step labels ("Push to GitHub") forced this column wider than its 1fr
+   track on narrow screens, pushing the whole page into horizontal scroll.
+   Confirmed live via a real overflow audit, not guessed. */
+.wizard-rail { position: sticky; top: 2rem; min-width: 0; }
+.wizard-actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
+/* This media block must come AFTER the base .wizard-rail rule above -- equal
+   specificity means source order decides, and .wizard-rail's position:sticky
+   was previously declared last, so it silently beat this block's
+   position:static on mobile widths and left the step rail pinned (sticky)
+   over the page content while scrolling. Real bug, found live on a phone
+   width. */
 @media (max-width: 780px) {
   /* minmax(0, 1fr), not bare 1fr -- a bare 1fr track's implicit minimum is
      "auto", which sizes the track to its content's min-content width and
@@ -618,13 +631,6 @@ legend {
     padding: 1rem 1.1rem;
   }
 }
-/* min-width:0 overrides the grid item default of min-width:auto, which
-   refuses to shrink below its content's natural width -- without it, long
-   step labels ("Push to GitHub") forced this column wider than its 1fr
-   track on narrow screens, pushing the whole page into horizontal scroll.
-   Confirmed live via a real overflow audit, not guessed. */
-.wizard-rail { position: sticky; top: 2rem; min-width: 0; }
-.wizard-actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
 
 /* Lane picker -------------------------------------------------------------- */
 .sr-only {
@@ -735,6 +741,7 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .dash-head h1 { margin-bottom: 0.3rem; }
 .dash-head .lede { margin-bottom: 0; }
 .dash-head-links { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.cleanup-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
 
 .stat-strip {
   display: flex;
@@ -890,6 +897,7 @@ td { padding: 0.65rem 0.6rem; border-bottom: 1px solid var(--wire); vertical-ali
 tr:last-child td { border-bottom: none; }
 .runs-table { background: var(--surface); border: 1px solid var(--wire); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.3rem 1rem; overflow-x: auto; }
 .runs-table table { margin-bottom: 0; }
+.runs-row-empty { background: var(--danger-soft); }
 
 .empty-state {
   color: var(--ink-faint); font-style: italic; padding: 1.25rem; text-align: center;

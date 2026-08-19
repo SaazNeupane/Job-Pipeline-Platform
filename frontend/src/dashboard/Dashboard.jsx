@@ -31,9 +31,17 @@ function CopyButton({ text }) {
   );
 }
 
+function matchPercent(score) {
+  if (score === null || score === undefined || score === "") return null;
+  return Math.round(Number(score) * 100);
+}
+
 function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRetry, open, onToggleOpen, applied, busy }) {
   const generating = row.reason_held === "generating";
   const failed = (row.reason_held || "").startsWith("generation_failed");
+  const match = matchPercent(row.match_score);
+  const terms = (row.matched_terms || "").split(",").filter(Boolean);
+  const flags = (row.content_flags || "").split("; ").filter(Boolean);
   return (
     <div className={`posting-card ${applied ? "posting-card--applied" : "posting-card--pending"}${selected ? " selected" : ""}`}>
       <div className="posting-card-top">
@@ -58,6 +66,7 @@ function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRe
                 <button type="button" className="badge-retry" onClick={onRetry} disabled={!!busy}>{busy === "retry" ? "retrying…" : "retry"}</button>
               </span>
             )}
+            {match !== null && <span className="badge signal">{match}% match</span>}
             {row.source && <span className="badge">{sourceLabel(row.source)}</span>}
             {row.location && <span className="badge">{row.location}</span>}
             {row.required_years && <span className="badge">{row.required_years}+ yrs exp</span>}
@@ -86,6 +95,16 @@ function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRe
             {row.application_url && <a className="button" href={row.application_url} target="_blank" rel="noopener">View posting &amp; apply</a>}
             {row.resume_link && <a className="button secondary" href={row.resume_link} target="_blank" rel="noopener">Open tailored resume</a>}
           </div>
+          {terms.length > 0 && (
+            <div className="swipe-card-terms">
+              {terms.map((t) => <span key={t} className="badge amber">{t}</span>)}
+            </div>
+          )}
+          {flags.length > 0 && (
+            <div className="swipe-card-terms">
+              {flags.map((f) => <span key={f} className="badge danger">{f}</span>)}
+            </div>
+          )}
           {row.cover_letter && (
             <>
               <div className="detail-panel-heading">
@@ -565,16 +584,30 @@ export default function Dashboard() {
             <table>
               <thead><tr><th>Date</th><th>New to swipe</th><th>Ready to apply</th><th>Applied</th><th>Emails</th><th>Errors</th></tr></thead>
               <tbody>
-                {[...data.summary].slice(-14).reverse().map((row, i) => (
-                  <tr key={i}>
-                    <td>{row.date}</td>
-                    <td>{row.queued_count !== "" ? row.queued_count : "n/a"}</td>
-                    <td>{row.awaiting_apply_count !== "" ? row.awaiting_apply_count : "n/a"}</td>
-                    <td>{row.applied_count}</td>
-                    <td>{row.emails_sent}</td>
-                    <td>{row.errors ? <span className="badge amber">{row.errors}</span> : <span className="hint">none</span>}</td>
-                  </tr>
-                ))}
+                {[...data.summary].slice(-14).reverse().map((row, i) => {
+                  const isEmpty = !row.errors && !row.queued_count && !row.awaiting_apply_count && !row.applied_count && !row.emails_sent;
+                  const emptyReason = !row.total_postings_found
+                    ? "no postings found"
+                    : !row.total_matched
+                      ? "found postings, none matched your lane filters"
+                      : "no activity";
+                  return (
+                    <tr key={i} className={isEmpty ? "runs-row-empty" : ""}>
+                      <td>{row.date}</td>
+                      <td>{row.queued_count !== "" ? row.queued_count : "n/a"}</td>
+                      <td>{row.awaiting_apply_count !== "" ? row.awaiting_apply_count : "n/a"}</td>
+                      <td>{row.applied_count}</td>
+                      <td>{row.emails_sent}</td>
+                      <td>
+                        {row.errors
+                          ? <span className="badge amber">{row.errors}</span>
+                          : isEmpty
+                            ? <span className="badge danger" title={emptyReason}>{emptyReason}</span>
+                            : <span className="hint">none</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

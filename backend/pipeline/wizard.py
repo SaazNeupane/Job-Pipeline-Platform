@@ -181,7 +181,7 @@ def _finalize_lane_dict(base: dict) -> dict:
     }
     for optional_key in (
         "seniority_max", "industries", "synonym_groups", "required_keywords", "radius_km",
-        "remote_types", "employment_types", "salary_min", "salary_max",
+        "remote_types", "employment_types", "salary_min", "salary_max", "min_match_score",
     ):
         if base.get(optional_key):
             lane_dict[optional_key] = base[optional_key]
@@ -210,6 +210,7 @@ def build_custom_lane(
     required_keywords: list[str] | None = None,
     seniority_max: str | None = None,
     industries: list[str] | None = None,
+    min_match_score: float | None = None,
 ) -> dict:
     if not label.strip():
         raise WizardError("Custom job type needs a name.")
@@ -229,6 +230,7 @@ def build_custom_lane(
         "required_keywords": required_keywords,
         "seniority_max": seniority_max,
         "industries": industries or [],
+        "min_match_score": min_match_score,
     }
     return _finalize_lane_dict(base)
 

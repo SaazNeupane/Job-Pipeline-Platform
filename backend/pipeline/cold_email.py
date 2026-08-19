@@ -172,8 +172,12 @@ def _candidate_emails(text: str) -> list[str]:
     return plain + obfuscated
 
 
-def _first_real_contact_email(text: str) -> str | None:
-    for raw_match in _candidate_emails(text):
+def _first_valid_email(candidates: list[str]) -> str | None:
+    """Same domain/local-part/placeholder exclusion rules applied to any raw
+    candidate list, regardless of where the candidates came from (visible
+    body text or a mailto: href) — see the excluded-pattern comments above
+    for what each check catches and why."""
+    for raw_match in candidates:
         # Strip trailing sentence punctuation the regex greedily swallows
         # (e.g. "...contact support@greenhouse.io." at the end of a sentence
         # would otherwise leave the domain as "greenhouse.io." — a trailing
@@ -190,6 +194,23 @@ def _first_real_contact_email(text: str) -> str | None:
     return None
 
 
+def _first_real_contact_email(text: str) -> str | None:
+    return _first_valid_email(_candidate_emails(text))
+
+
+# href="mailto:jane@acmecorp.com" -- a structured signal _strip_html discards
+# entirely (it drops every tag and attribute, keeping only visible text), so
+# a contact/careers page that links a mailto: address rather than printing it
+# in visible text was previously invisible to find_contact_via_company_site
+# no matter how the cap/scan logic was tuned. Matched against the RAW
+# response body, before _strip_html runs.
+_MAILTO_RE = re.compile(r'href=["\']mailto:([^"\'?]+)', re.IGNORECASE)
+
+
+def _mailto_candidates(raw_html: str) -> list[str]:
+    return _MAILTO_RE.findall(raw_html or "")
+
+
 def find_contact(posting) -> ContactMatch | None:
     email = _first_real_contact_email(posting.description_text)
     return ContactMatch(email=email) if email else None
@@ -197,13 +218,15 @@ def find_contact(posting) -> ContactMatch | None:
 
 def find_contact_via_company_site(posting) -> ContactMatch | None:
     """Follows an Adzuna posting's own redirect_url for real (never a
-    guessed domain) and scans the landing page's visible text for a
-    published contact email, using the exact same extraction/exclusion
-    rules as find_contact(). Adzuna-only — see this module's docstring for
-    why every other source's url is redundant with description_text already
-    scanned by find_contact(). Never raises: a network failure, non-HTML
-    response, or oversized page just means "no contact found here," same as
-    posting text with nothing in it."""
+    guessed domain) and looks for a published contact email, using the exact
+    same extraction/exclusion rules as find_contact(). Checks mailto: links
+    in the raw HTML first (a structured signal the visible-text scan can't
+    see), then falls back to scanning the landing page's visible text.
+    Adzuna-only — see this module's docstring for why every other source's
+    url is redundant with description_text already scanned by
+    find_contact(). Never raises: a network failure, non-HTML response, or
+    oversized page just means "no contact found here," same as posting text
+    with nothing in it."""
     if posting.source != "adzuna" or not posting.url:
         return None
     try:
@@ -211,6 +234,10 @@ def find_contact_via_company_site(posting) -> ContactMatch | None:
         response.raise_for_status()
     except requests.RequestException:
         return None
+
+    mailto_email = _first_valid_email(_mailto_candidates(response.text))
+    if mailto_email:
+        return ContactMatch(email=mailto_email)
 
     text = _strip_html(response.text)[:COMPANY_SITE_MAX_TEXT_CHARS]
     email = _first_real_contact_email(text)

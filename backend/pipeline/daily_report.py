@@ -41,16 +41,22 @@ from pipeline.postings_store import get_cold_emails, get_postings, record_daily_
 
 def build_daily_summary(
     user: str, today: date | None = None, errors: list[str] | None = None, cold_email_stats: dict | None = None,
+    run_stats: dict | None = None,
 ) -> dict:
     """cold_email_stats, if given, is the funnel dict returned by
     cold_email.run_cold_email_pipeline() (scanned/eligible/matched/
     contacts_found) — cold email now runs its own independent search, so
     those counts can't be reconstructed from the Sheet after the fact the
-    way emails_sent (a real sent-today count) still can."""
+    way emails_sent (a real sent-today count) still can. run_stats, same
+    idea, is job-search lanes' own live counts (total postings found by
+    search, total that passed filter_postings before the daily cap) —
+    same reasoning, not reconstructable from stored Posting rows after the
+    fact since a zero-match posting is never persisted at all."""
     today = today or date.today()
     today_str = today.isoformat()
     errors = errors or []
     cold_email_stats = cold_email_stats or {}
+    run_stats = run_stats or {}
 
     applied_today = [r for r in get_postings(user, status="applied") if r.get("date") == today_str]
     queued_today = [r for r in get_postings(user, status="queued") if r.get("date") == today_str]
@@ -67,6 +73,8 @@ def build_daily_summary(
         "cold_email_eligible": cold_email_stats.get("eligible", 0),
         "cold_email_matched": cold_email_stats.get("matched", 0),
         "cold_email_contacts_found": cold_email_stats.get("contacts_found", 0),
+        "total_postings_found": run_stats.get("total_postings_found", 0),
+        "total_matched": run_stats.get("total_matched", 0),
         "errors": errors,
     }
 
@@ -189,6 +197,8 @@ def send_daily_report(user: str, summary: dict) -> None:
         "cold_email_eligible": summary["cold_email_eligible"],
         "cold_email_matched": summary["cold_email_matched"],
         "cold_email_contacts_found": summary["cold_email_contacts_found"],
+        "total_postings_found": summary.get("total_postings_found", 0),
+        "total_matched": summary.get("total_matched", 0),
     })
 
     subject = (

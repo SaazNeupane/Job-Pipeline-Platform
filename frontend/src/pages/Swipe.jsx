@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
+import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Loading from "../components/Loading.jsx";
 import { useApiData } from "../hooks/useApiData.js";
 import { sourceLabel } from "../sourceLabels.js";
@@ -13,9 +14,16 @@ function money(min, max) {
   return "";
 }
 
+function matchPercent(score) {
+  if (score === null || score === undefined || score === "") return null;
+  return Math.round(Number(score) * 100);
+}
+
 function SwipeCard({ row, laneLabels, exiting, entering }) {
   const terms = (row.matched_terms || "").split(",").filter(Boolean);
+  const flags = (row.content_flags || "").split("; ").filter(Boolean);
   const salary = money(row.salary_min, row.salary_max);
+  const match = matchPercent(row.match_score);
   const stateClass = exiting ? ` exit-${exiting}` : entering ? " entering" : "";
   return (
     <div className={`swipe-card${stateClass}`}>
@@ -29,6 +37,7 @@ function SwipeCard({ row, laneLabels, exiting, entering }) {
         {row.source && <span className="badge">{sourceLabel(row.source)}</span>}
       </div>
       <div className="swipe-card-facts">
+        {match !== null && <div><span className="eyebrow">Match</span>{match}%</div>}
         {row.posted_date && <div><span className="eyebrow">Posted</span>{row.posted_date.slice(0, 10)}</div>}
         {salary && <div><span className="eyebrow">Salary</span>{salary}</div>}
         {row.required_years && <div><span className="eyebrow">Experience</span>{row.required_years}+ years</div>}
@@ -36,6 +45,11 @@ function SwipeCard({ row, laneLabels, exiting, entering }) {
       {terms.length > 0 && (
         <div className="swipe-card-terms">
           {terms.map((t) => <span key={t} className="badge amber">{t}</span>)}
+        </div>
+      )}
+      {flags.length > 0 && (
+        <div className="swipe-card-terms">
+          {flags.map((f) => <span key={f} className="badge danger">{f}</span>)}
         </div>
       )}
       {row.description_text && (
@@ -71,6 +85,9 @@ export default function Swipe() {
   const [exiting, setExiting] = useState(null); // null | "like" | "reject"
   const [entering, setEntering] = useState(false);
   const [lastLiked, setLastLiked] = useState(null);
+  const [cleanupThreshold, setCleanupThreshold] = useState("");
+  const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
 
   const current = queue && queue.length ? queue[0] : null;
   const next = queue && queue.length > 1 ? queue[1] : null;
@@ -109,6 +126,23 @@ export default function Swipe() {
   const like = () => decide("like");
   const reject = () => decide("reject");
 
+  async function doCleanup() {
+    setCleanupConfirmOpen(false);
+    const pct = parseFloat(cleanupThreshold);
+    if (Number.isNaN(pct)) return;
+    setCleanupBusy(true);
+    setError("");
+    try {
+      await api.cleanupQueue(pct / 100);
+      const fresh = await api.swipeQueue();
+      setData(fresh);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCleanupBusy(false);
+    }
+  }
+
   useEffect(() => {
     function onKey(e) {
       if (busy || !current) return;
@@ -132,6 +166,28 @@ export default function Swipe() {
         </div>
         <Link className="button secondary" to="/dashboard">Dashboard</Link>
       </div>
+
+      {queue && queue.length > 0 && (
+        <div className="cleanup-row">
+          <label>
+            Remove queued postings below
+            <input
+              type="number" min="0" max="100" placeholder="e.g. 40"
+              value={cleanupThreshold}
+              onChange={(e) => setCleanupThreshold(e.target.value)}
+              style={{ width: "5em", margin: "0 0.4em" }}
+            />
+            % match
+          </label>
+          <button
+            type="button" className="ghost"
+            onClick={() => setCleanupConfirmOpen(true)}
+            disabled={cleanupBusy || cleanupThreshold === "" || Number.isNaN(parseFloat(cleanupThreshold))}
+          >
+            {cleanupBusy ? "Cleaning up…" : "Clean up queue"}
+          </button>
+        </div>
+      )}
 
       {error && <div className="banner">{error}</div>}
       {lastLiked && (
@@ -158,6 +214,15 @@ export default function Swipe() {
           <div className="empty-state">Nothing waiting for a swipe right now. Check back after the next run.</div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={cleanupConfirmOpen}
+        title="Clean up queue"
+        body={`Remove every queued posting below ${cleanupThreshold}% match? This can't be undone.`}
+        confirmLabel="Remove"
+        onConfirm={doCleanup}
+        onCancel={() => setCleanupConfirmOpen(false)}
+      />
     </>
   );
 }

@@ -29,12 +29,15 @@ function AccountLink() {
     return <Link to="/login" className="topbar-link">Log in</Link>;
   }
   return (
-    <button
-      type="button" className="topbar-link topbar-exit"
-      onClick={() => { logout(); navigate("/"); }}
-    >
-      Log out
-    </button>
+    <>
+      <Link to="/dashboard" className="topbar-link">Dashboard</Link>
+      <button
+        type="button" className="topbar-link topbar-exit"
+        onClick={() => { logout(); navigate("/"); }}
+      >
+        Log out
+      </button>
+    </>
   );
 }
 

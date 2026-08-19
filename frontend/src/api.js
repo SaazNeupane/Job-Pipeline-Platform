@@ -85,6 +85,12 @@ function patch(path, body) {
   }).then(handle);
 }
 
+async function getBlob(path) {
+  const resp = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  if (!resp.ok) return handle(resp);
+  return resp.blob();
+}
+
 function upload(path, file, fieldName, extraFields) {
   const form = new FormData();
   form.append(fieldName, file);
@@ -111,6 +117,7 @@ export const api = {
   submitLanes: (body) => post("/api/wizard/lanes", body),
   importResume: (file, geminiApiKey) => upload("/api/wizard/resume/import", file, "resume_pdf", { gemini_api_key: geminiApiKey }),
   review: () => get("/api/wizard/review"),
+  previewResume: (lane) => getBlob(`/api/wizard/resume/preview${lane ? `?lane=${encodeURIComponent(lane)}` : ""}`),
   finalize: () => post("/api/wizard/finalize"),
 
   // -- swipe queue --
@@ -118,6 +125,7 @@ export const api = {
   swipeLike: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/like`),
   swipeReject: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/reject`),
   addManualPosting: (lane, text, url) => post("/api/swipe/manual", { lane, text, url }),
+  cleanupQueue: (minScore) => post("/api/swipe/clean-up", { min_score: minScore }),
 
   // -- dashboard --
   dashboard: () => get("/api/dashboard"),

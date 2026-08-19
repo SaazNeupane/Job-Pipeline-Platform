@@ -69,6 +69,7 @@ class Lane:
     employment_types: list[str] = field(default_factory=list)
     salary_min: float | None = None
     salary_max: float | None = None
+    min_match_score: float | None = None
 
 
 @dataclass

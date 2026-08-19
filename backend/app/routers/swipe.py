@@ -12,7 +12,7 @@ from app.routers._dashboard_helpers import group_by_lane, lane_label, newest_fir
 from pipeline.config import load_profile
 from pipeline.google_auth import BACKGROUND_EXECUTOR
 from pipeline.postings_store import get_postings
-from pipeline.swipe_actions import add_manual_posting, generate_liked_materials, queue_like, reject_posting
+from pipeline.swipe_actions import add_manual_posting, generate_liked_materials, queue_like, reject_posting, reject_postings_below_score
 
 router = APIRouter(prefix="/api/swipe", tags=["swipe"])
 
@@ -79,6 +79,16 @@ def add_manual(body: ManualPostingRequest, user: User = Depends(get_current_user
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     BACKGROUND_EXECUTOR.submit(_generate_in_background, user.id, match)
     return {"ok": True, "row": {"company": match.get("company", ""), "role": match.get("role", "")}}
+
+
+class CleanUpRequest(BaseModel):
+    min_score: float
+
+
+@router.post("/clean-up")
+def clean_up(body: CleanUpRequest, user: User = Depends(get_current_user)):
+    removed = reject_postings_below_score(user.id, body.min_score)
+    return {"removed": removed}
 
 
 @router.post("/{posting_key:path}/like")

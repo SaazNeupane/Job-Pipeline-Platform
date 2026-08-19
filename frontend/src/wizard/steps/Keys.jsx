@@ -15,6 +15,10 @@ export default function Keys() {
   async function submit(e) {
     e.preventDefault();
     setError("");
+    if (!form.adzuna_app_id.trim() || !form.adzuna_app_key.trim() || !form.gemini_api_key.trim()) {
+      setError("All three keys are required before continuing.");
+      return;
+    }
     try {
       await api.patchDraft({ secrets: form });
       await refreshDraft();
@@ -26,8 +30,8 @@ export default function Keys() {
 
   return (
     <>
-      <h1>API keys (optional -- add now or later)</h1>
-      <p>Both are free. Adzuna powers job search; Gemini writes your cover letters and helps reword resume bullets to match each posting. You can finish setup without these and add them from your dashboard whenever you're ready -- search and cover letters just won't run until you do.</p>
+      <h1>API keys</h1>
+      <p>Both are free and required. Adzuna powers job search; Gemini writes your cover letters and helps reword resume bullets to match each posting.</p>
       {error && <p className="error-banner">{error}</p>}
       <form onSubmit={submit}>
         <fieldset>

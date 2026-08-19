@@ -61,13 +61,13 @@ _TAB_COLUMNS = {
     "daily_summary": [
         "date", "applied_count", "pending_approval_count", "emails_sent", "errors", "notes",
         "queued_count", "awaiting_apply_count", "cold_email_scanned", "cold_email_eligible",
-        "cold_email_matched", "cold_email_contacts_found",
+        "cold_email_matched", "cold_email_contacts_found", "total_postings_found", "total_matched",
     ],
 }
 
 _POSTING_COLUMNS = [
     "posting_key", "status", "date", "lane", "company", "role", "source", "location", "job_id",
-    "application_url", "description_text", "matched_terms", "posted_date", "remote_type",
+    "application_url", "description_text", "matched_terms", "match_score", "posted_date", "remote_type",
     "employment_type", "salary_min", "salary_max", "required_years", "reason_held",
     "resume_version", "resume_link", "cover_letter", "content_flags", "application_status",
     "contact_emailed", "email_sent_at", "dismissed_at", "notes",
@@ -366,7 +366,7 @@ def update_cold_email(user: str, posting_key: str, updates: dict) -> dict | None
 _SUMMARY_COLUMNS = [
     "date", "applied_count", "pending_approval_count", "emails_sent", "queued_count",
     "awaiting_apply_count", "cold_email_scanned", "cold_email_eligible", "cold_email_matched",
-    "cold_email_contacts_found", "errors", "notes",
+    "cold_email_contacts_found", "total_postings_found", "total_matched", "errors", "notes",
 ]
 
 

@@ -22,7 +22,18 @@ function laneSearchFacts(lane) {
   return facts;
 }
 
-function ReviewSummary({ profile, resumes }) {
+async function previewResumePdf(laneName, setError) {
+  try {
+    const blob = await api.previewResume(laneName);
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (e) {
+    setError(e.message);
+  }
+}
+
+function ReviewSummary({ profile, resumes, setError }) {
   const laneNames = (profile.lanes || []).map((lane) => lane.name);
   const tiles = [
     {
@@ -83,6 +94,7 @@ function ReviewSummary({ profile, resumes }) {
                   ))}
                 </div>
                 {facts.length > 0 && <div className="resume-lane-facts">Searching: {facts.join(" · ")}</div>}
+                <button type="button" className="ghost" onClick={() => previewResumePdf(laneName, setError)}>Preview PDF</button>
               </div>
             );
           })}
@@ -130,7 +142,7 @@ export default function Review() {
 
       {preview ? (
         <>
-          <ReviewSummary profile={preview.profile_yaml} resumes={preview.resumes} />
+          <ReviewSummary profile={preview.profile_yaml} resumes={preview.resumes} setError={setError} />
           <details className="advanced">
             <summary>View raw data</summary>
             <div className="card">

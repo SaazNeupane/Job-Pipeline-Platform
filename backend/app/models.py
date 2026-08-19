@@ -137,6 +137,7 @@ class Posting(Base):
     application_url: Mapped[str] = mapped_column(String, default="")
     description_text: Mapped[str] = mapped_column(Text, default="")
     matched_terms: Mapped[str] = mapped_column(String, default="")
+    match_score: Mapped[float] = mapped_column(Numeric, default=0)
     posted_date: Mapped[str] = mapped_column(String, default="")
     remote_type: Mapped[str] = mapped_column(String, default="")
     employment_type: Mapped[str] = mapped_column(String, default="")
@@ -214,6 +215,8 @@ class DailySummary(Base):
     cold_email_eligible: Mapped[int] = mapped_column(Integer, default=0)
     cold_email_matched: Mapped[int] = mapped_column(Integer, default=0)
     cold_email_contacts_found: Mapped[int] = mapped_column(Integer, default=0)
+    total_postings_found: Mapped[int] = mapped_column(Integer, default=0)
+    total_matched: Mapped[int] = mapped_column(Integer, default=0)
     errors: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(Text, default="")
 

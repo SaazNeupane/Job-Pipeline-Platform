@@ -250,6 +250,22 @@ def _match_terms(posting: Posting, lane: Lane) -> list[str]:
     return keyword_matches + industry_matches
 
 
+def _match_score(matched: list[str], lane: Lane) -> float:
+    """0-1 relevance score from the same matched-terms signal run_pipeline.py
+    already sorts queued matches by (see queue_matches's sort key) — required
+    keywords count double since a required-keyword hit is a stronger signal
+    than an incidental one. Denominator includes required_keywords' own
+    length as extra weight slots so a lane whose entire keyword list is
+    required doesn't get capped below 1.0 by double-counting."""
+    total_terms = len(lane.keywords) + len(lane.industries)
+    if total_terms == 0:
+        return 0.0
+    required = set(lane.required_keywords or [])
+    weighted_total = total_terms + len(required)
+    weighted_matched = sum(2.0 if term in required else 1.0 for term in matched)
+    return min(weighted_matched / weighted_total, 1.0)
+
+
 def _exceeds_seniority(posting: Posting, lane: Lane) -> bool:
     cap = lane.seniority_max
     if not cap or cap not in _SENIORITY_RANK:
@@ -309,8 +325,8 @@ def filter_postings(
     target_countries: list[str] | None = None,
     existing_fingerprints: set[str] | None = None,
     max_age_days: int = RECENCY_MAX_AGE_DAYS,
-) -> list[tuple[Posting, list[str]]]:
-    """Returns (posting, matched_terms) pairs for postings that are new
+) -> list[tuple[Posting, list[str], float]]:
+    """Returns (posting, matched_terms, match_score) tuples for postings that are new
     (not in existing_keys, and not matching existing_fingerprints if given
     — see posting_fingerprint's own docstring for why posting_key alone
     isn't enough), within the lane's seniority cap (title-based)
@@ -371,5 +387,8 @@ def filter_postings(
             continue
         if lane.required_keywords and not any(term in matched for term in lane.required_keywords):
             continue
-        results.append((posting, matched))
+        score = _match_score(matched, lane)
+        if lane.min_match_score is not None and score < lane.min_match_score:
+            continue
+        results.append((posting, matched, score))
     return results

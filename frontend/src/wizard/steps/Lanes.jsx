@@ -10,7 +10,7 @@ const emptyCustomLane = () => ({
   inPerson: false, radius_km: "",
   sources: null, // null = all real sources (backend default)
   remote_types: [], employment_types: [],
-  salary_min: "", salary_max: "",
+  salary_min: "", salary_max: "", min_match_score: "",
 });
 
 function csv(s) {
@@ -135,6 +135,7 @@ export default function Lanes() {
         employment_types: c.employment_types,
         salary_min: c.salary_min ? parseFloat(c.salary_min) : null,
         salary_max: c.salary_max ? parseFloat(c.salary_max) : null,
+        min_match_score: c.min_match_score ? parseFloat(c.min_match_score) / 100 : null,
       }));
 
     try {
@@ -375,6 +376,10 @@ function CustomLaneEditor({ lane, meta, onChange, onRemove }) {
           <label>Salary min (optional)<input type="number" value={lane.salary_min} onChange={(e) => onChange({ salary_min: e.target.value })} /></label>
           <label>Salary max (optional)<input type="number" value={lane.salary_max} onChange={(e) => onChange({ salary_max: e.target.value })} /></label>
         </div>
+
+        <label>Minimum match score (optional, 0-100%)
+          <input type="number" min="0" max="100" value={lane.min_match_score} onChange={(e) => onChange({ min_match_score: e.target.value })} />
+        </label>
 
         <label className="checkbox-row">
           <input type="checkbox" checked={lane.inPerson} onChange={(e) => onChange({ inPerson: e.target.checked })} />

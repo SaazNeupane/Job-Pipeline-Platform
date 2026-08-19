@@ -9,8 +9,11 @@ before allowing finalize.
 from __future__ import annotations
 
 import logging
+import tempfile
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -23,6 +26,7 @@ from pipeline import wizard as wizard_logic
 from pipeline.filter import SENIORITY_LEVELS
 from pipeline.geocode import geocode_address
 from pipeline.google_auth import BACKGROUND_EXECUTOR
+from pipeline.tailor_resume import render_resume_pdf
 
 router = APIRouter(prefix="/api/wizard", tags=["wizard"])
 logger = logging.getLogger(__name__)
@@ -145,6 +149,7 @@ def set_lanes(body: dict, user: User = Depends(get_current_user), db: Session = 
                 required_keywords=c.get("required_keywords"),
                 seniority_max=c.get("seniority_max"),
                 industries=c.get("industries"),
+                min_match_score=c.get("min_match_score"),
             ))
     except wizard_logic.WizardError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
@@ -197,6 +202,26 @@ def _build_profile_and_resumes(user_id: str, draft: dict, granted_email: str) ->
     # main.py's active_users()) -- attached here only so Review.jsx has something to show.
     profile_dict["run_hour_utc"] = draft.get("run_hour_utc", 14)
     return profile_dict, resumes
+
+
+@router.get("/resume/preview")
+def preview_resume(lane: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Renders the user's current wizard-draft resume (untailored -- no posting exists yet
+    to tailor against) as a real PDF via the same render_resume_pdf tailor_resume.py uses for
+    the daily pipeline, so the Review step can show exactly what a base resume will look
+    like before finalize."""
+    draft = _get_or_create_draft(db, user.id).draft_json
+    lane_names = draft.get("lane_names") or []
+    if not draft.get("shared_resume") or not lane_names:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Finish the resume and job-types steps first.")
+    lane_name = lane if lane in lane_names else lane_names[0]
+
+    resume = wizard_logic.build_resume_json(draft["shared_resume"], lane_name, lane_names)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        pdf_path = Path(tmp_dir) / "preview.pdf"
+        render_resume_pdf(resume, pdf_path)
+        pdf_bytes = pdf_path.read_bytes()
+    return Response(content=pdf_bytes, media_type="application/pdf")
 
 
 @router.get("/review")
