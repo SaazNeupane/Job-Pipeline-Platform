@@ -9,3 +9,4 @@ dist/
 *.egg-info/
 .pytest_cache/
 CLAUDE.md
+PLATFORM_FEEDBACK.md
