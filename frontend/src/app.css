@@ -37,6 +37,18 @@
 }
 .container.wide { max-width: 1100px; }
 
+.site-footer {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--wire);
+}
+
+.legal-page h2 { margin-top: 2rem; }
+.legal-page ul { padding-left: 1.25rem; }
+.legal-page li { margin-bottom: 0.4rem; }
+
 /* Buttons --------------------------------------------------------------- */
 button, .button {
   font-family: var(--font-body);

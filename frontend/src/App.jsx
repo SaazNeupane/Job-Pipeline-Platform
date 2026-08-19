@@ -9,6 +9,8 @@ import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
+import Privacy from "./pages/Privacy.jsx";
+import Terms from "./pages/Terms.jsx";
 import Dashboard from "./dashboard/Dashboard.jsx";
 import Swipe from "./pages/Swipe.jsx";
 import ColdEmail from "./pages/ColdEmail.jsx";
@@ -108,6 +110,8 @@ export default function App() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/setup" element={<ProtectedRoute><WizardLayout /></ProtectedRoute>}>
             <Route path="about" element={<About />} />
             <Route path="lanes" element={<Lanes />} />
@@ -122,6 +126,10 @@ export default function App() {
           <Route path="/cold-email" element={<ProtectedRoute><ColdEmail /></ProtectedRoute>} />
         </Routes>
       </main>
+      <footer className="site-footer">
+        <Link to="/terms" className="topbar-link">Terms</Link>
+        <Link to="/privacy" className="topbar-link">Privacy</Link>
+      </footer>
     </>
   );
 }

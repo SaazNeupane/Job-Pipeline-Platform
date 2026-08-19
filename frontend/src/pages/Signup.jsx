@@ -38,6 +38,10 @@ export default function Signup() {
           <button type="submit" className="primary" disabled={busy}>{busy ? "Creating…" : "Create account"}</button>
         </div>
       </form>
+      <p className="hint">
+        By creating an account you agree to the <Link to="/terms">Terms</Link> and{" "}
+        <Link to="/privacy">Privacy Policy</Link>.
+      </p>
       <p className="hint">Already have an account? <Link to="/login">Log in</Link></p>
     </>
   );
