@@ -35,7 +35,7 @@ from pipeline.daily_report import build_daily_summary, send_daily_report
 from pipeline.drive_storage import cleanup_old_files
 from pipeline.filter import RECENCY_MAX_AGE_DAYS, filter_postings, posting_fingerprint
 from pipeline.postings_store import get_existing_dedupe_keys, get_existing_fingerprints
-from pipeline.search import search_adzuna, search_ashby, search_greenhouse, search_hiring_cafe, search_lever
+from pipeline.search import search_adzuna, search_ashby, search_greenhouse, search_hiring_cafe, search_lever, search_workday
 from pipeline.swipe_actions import queue_for_swipe
 
 
@@ -104,6 +104,20 @@ def run(
     if "ashby" in sources_needed:
         result = _try("search_ashby", search_ashby, profile.ashby_boards)
         all_postings.extend(result or [])
+
+    # Backend-only spike (2026-08-18): no DB column/wizard/frontend field for Workday
+    # boards yet (deliberately, per explicit scope decision) — configured via a
+    # comma-separated WORKDAY_BOARDS env var ("host/tenant/site" entries) instead of
+    # profile-level config, same as every other source's board list would be. Promote
+    # to a real profile.workday_boards column + wizard field once this is validated
+    # against real data.
+    if "workday" in sources_needed:
+        workday_boards = [b.strip() for b in os.environ.get("WORKDAY_BOARDS", "").split(",") if b.strip()]
+        if workday_boards:
+            result = _try("search_workday", search_workday, workday_boards)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_workday: WORKDAY_BOARDS not set, skipped")
 
     if "hiring_cafe" in sources_needed:
         hiring_cafe_keywords = sorted({kw for lane in lanes if "hiring_cafe" in lane.sources for kw in lane.keywords})
@@ -217,6 +231,18 @@ def run(
     # lanes' matches or run once per lane. See cold_email.py's module
     # docstring for why.
     cold_email_stats = _try("run_cold_email_pipeline", run_cold_email_pipeline, user, profile, secrets)
+    # Per-candidate generation/send failures inside cold_email.py are individually caught
+    # and skipped (module docstring: one bad candidate shouldn't sink the whole batch) --
+    # which also means a consistently bad cause (an expired/revoked Gemini key, say) never
+    # raised here and never landed in `errors` on its own. A run where every single
+    # candidate failed the same way used to look identical to a run with 0 real matches --
+    # surfaced as an explicit error instead, so it shows up in the dashboard's run history
+    # instead of silently half-failing forever.
+    if cold_email_stats and cold_email_stats.get("generation_failures"):
+        errors.append(
+            f"run_cold_email_pipeline: {cold_email_stats['generation_failures']} email(s) failed to "
+            f"generate/send -- check your Gemini/Gmail connection if this keeps happening"
+        )
 
     deleted_count = _try("cleanup_old_files", cleanup_old_files, user)
     if deleted_count:

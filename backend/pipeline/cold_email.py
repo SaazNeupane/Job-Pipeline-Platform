@@ -444,6 +444,7 @@ def run_cold_email_pipeline(user: str, profile, secrets: dict) -> dict:
         "matched": len(candidates),
         "contacts_found": send_stats["contacts_found"],
         "sent": len(send_stats["results"]),
+        "generation_failures": send_stats["generation_failures"],
     }
 
 
@@ -463,6 +464,7 @@ def _send_cold_emails(user: str, profile, candidates: list[tuple]) -> dict:
 
     results = []
     contacts_found = 0
+    generation_failures = 0
     for posting, matched_terms, lane_name, resume in candidates:
         if posting.dedupe_key() in existing_keys:
             continue
@@ -489,6 +491,7 @@ def _send_cold_emails(user: str, profile, candidates: list[tuple]) -> dict:
             sent = send_cold_email(user, contact.email, subject, body)
         except Exception as exc:  # noqa: BLE001 — deliberately broad, see comment above
             print(f"[cold_email] {posting.dedupe_key()}: generation/send failed ({exc}), skipping")
+            generation_failures += 1
             continue
 
         record_cold_email(user, {
@@ -506,4 +509,4 @@ def _send_cold_emails(user: str, profile, candidates: list[tuple]) -> dict:
         already_sent_today += 1
         results.append({"posting": posting, "contact_email": contact.email, "sent": True})
 
-    return {"results": results, "contacts_found": contacts_found}
+    return {"results": results, "contacts_found": contacts_found, "generation_failures": generation_failures}
