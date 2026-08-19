@@ -104,6 +104,8 @@ export const api = {
   login: (email, password) => post("/api/auth/login", { email, password }),
   me: () => get("/api/me"),
   resendVerification: () => post("/api/auth/resend-verification"),
+  forgotPassword: (email) => post("/api/auth/forgot-password", { email }),
+  resetPassword: (token, password) => post("/api/auth/reset-password", { token, password }),
 
   // -- google connect (Sheets/Gmail/Drive scopes) --
   googleOAuthStart: () => get("/api/oauth/google/start"),

@@ -37,6 +37,7 @@ export default function Login() {
         </div>
       </form>
       <p className="hint">No account yet? <Link to="/signup">Sign up</Link></p>
+      <p className="hint"><Link to="/forgot-password">Forgot your password?</Link></p>
     </>
   );
 }

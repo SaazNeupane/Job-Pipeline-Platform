@@ -72,6 +72,38 @@ def decode_email_verification_token(token: str) -> str:
     return payload["sub"]
 
 
+_RESET_PASSWORD_EXPIRES_MINUTES = 30
+
+
+def create_password_reset_token(user_id: str, password_hash: str) -> str:
+    """Purpose-scoped like create_email_verification_token. Bakes in a hash of the
+    current password_hash so any token issued before a successful reset (or a second
+    concurrent reset request) is invalidated the moment the password actually changes,
+    without needing a separate revocation table -- once password_hash changes, no
+    previously issued token's embedded fingerprint matches anymore."""
+    payload = {
+        "sub": user_id,
+        "purpose": "reset_password",
+        "pwfp": password_hash[-16:],
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=_RESET_PASSWORD_EXPIRES_MINUTES),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_password_reset_token(token: str, current_password_hash: str) -> str:
+    """Returns the user id if valid, raises HTTPException otherwise."""
+    invalid = HTTPException(status.HTTP_400_BAD_REQUEST, "This reset link is invalid or expired.")
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise invalid
+    if payload.get("purpose") != "reset_password":
+        raise invalid
+    if payload.get("pwfp") != current_password_hash[-16:]:
+        raise invalid
+    return payload["sub"]
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),

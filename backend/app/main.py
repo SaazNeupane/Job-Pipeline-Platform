@@ -16,6 +16,8 @@ import secrets as _secrets
 import time
 import uuid
 
+import jwt
+
 from datetime import date, datetime
 from pathlib import Path
 
@@ -190,6 +192,63 @@ def resend_verification(background_tasks: BackgroundTasks, user: User = Depends(
         return {"status": "already_verified"}
     background_tasks.add_task(_send_verification_email, user.id, user.email)
     return {"status": "sent"}
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str
+
+
+def _send_password_reset_email(user_id: str, email: str, password_hash: str) -> None:
+    from app.auth import create_password_reset_token
+    from pipeline.email_send import send_email
+
+    frontend_origin = os.environ.get("FRONTEND_ORIGIN", "http://localhost:5173")
+    token = create_password_reset_token(user_id, password_hash)
+    link = f"{frontend_origin}/reset-password?token={token}"
+    send_email(
+        email,
+        "Reset your password",
+        f'<p>Someone requested a password reset for this account. If this was you, '
+        f'click below to choose a new password.</p>'
+        f'<p><a href="{link}">Reset your password</a></p>'
+        f'<p>This link expires in 30 minutes. If you didn\'t request this, ignore this email.</p>',
+    )
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(body: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Always returns the same response regardless of whether the email exists --
+    otherwise this endpoint becomes an account-enumeration oracle."""
+    user = db.query(User).filter(User.email == body.email).one_or_none()
+    if user is not None:
+        background_tasks.add_task(_send_password_reset_email, user.id, user.email, user.password_hash)
+    return {"status": "sent"}
+
+
+@app.post("/api/auth/reset-password", response_model=TokenResponse)
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    from app.auth import decode_password_reset_token
+
+    # Token's embedded fingerprint is checked against whichever user it decodes to,
+    # so look the token's claimed subject up first without trusting it, then verify.
+    try:
+        unverified = jwt.decode(body.token, options={"verify_signature": False})
+    except jwt.PyJWTError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This reset link is invalid or expired.")
+    user = db.get(User, unverified.get("sub"))
+    if user is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This reset link is invalid or expired.")
+    decode_password_reset_token(body.token, user.password_hash)
+    if len(body.password) < 8:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Password must be at least 8 characters.")
+    user.password_hash = hash_password(body.password)
+    db.commit()
+    return TokenResponse(access_token=create_access_token(user.id))
 
 
 @app.post("/api/auth/login", response_model=TokenResponse)

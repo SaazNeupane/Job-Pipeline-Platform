@@ -7,6 +7,8 @@ import { showToast } from "./toast.js";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import Dashboard from "./dashboard/Dashboard.jsx";
 import Swipe from "./pages/Swipe.jsx";
 import ColdEmail from "./pages/ColdEmail.jsx";
@@ -104,6 +106,8 @@ export default function App() {
           <Route path="/guide" element={<Navigate to="/#guide" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/setup" element={<ProtectedRoute><WizardLayout /></ProtectedRoute>}>
             <Route path="about" element={<About />} />
             <Route path="lanes" element={<Lanes />} />
