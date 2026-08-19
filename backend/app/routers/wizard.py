@@ -26,12 +26,18 @@ from pipeline import wizard as wizard_logic
 from pipeline.filter import SENIORITY_LEVELS
 from pipeline.geocode import geocode_address
 from pipeline.google_auth import submit_for_user
+from app.rate_limit import rate_limit
 from pipeline.tailor_resume import render_resume_pdf
 
 router = APIRouter(prefix="/api/wizard", tags=["wizard"])
 logger = logging.getLogger(__name__)
 
 _EMPTY_DRAFT = {"lanes": [], "lane_names": [], "lane_labels": {}}
+
+# Nominatim's usage policy caps at ~1 request/second and will ban an abusive endpoint --
+# this is a shared, unauthenticated-beyond-JWT relay to it, so a looping client could get
+# the whole app's geocoding blocked for everyone, not just themselves.
+_rate_limit_geocode = rate_limit(20, 60)
 
 
 def _get_or_create_draft(db: Session, user_id: str) -> WizardDraft:
@@ -78,7 +84,7 @@ def patch_draft(body: dict, user: User = Depends(get_current_user), db: Session 
     return draft
 
 
-@router.post("/geocode")
+@router.post("/geocode", dependencies=[Depends(_rate_limit_geocode)])
 def geocode(body: dict, user: User = Depends(get_current_user)):
     address = str(body.get("address", "")).strip()
     if not address:

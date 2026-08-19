@@ -33,6 +33,7 @@ from starlette.responses import FileResponse, JSONResponse, RedirectResponse
 from app.auth import create_access_token, get_current_user, hash_password, verify_password
 from app.db import SessionLocal, get_db
 from app.models import Invite, Profile, User
+from app.rate_limit import rate_limit
 from app.routers import dashboard as dashboard_router
 from app.routers import swipe as swipe_router
 from app.routers import wizard as wizard_router
@@ -87,6 +88,12 @@ app.add_middleware(
 )
 
 INTERNAL_SHARED_SECRET = os.environ["INTERNAL_SHARED_SECRET"]
+
+# Unthrottled, these are the routes most worth abusing: login is a bcrypt oracle, signup
+# lets anyone hammer invite codes, forgot-password can be used to spam a stranger's inbox.
+rate_limit_signup = rate_limit(5, 60)
+rate_limit_login = rate_limit(10, 60)
+rate_limit_forgot_password = rate_limit(3, 300)
 
 
 @app.middleware("http")
@@ -150,7 +157,7 @@ def _send_verification_email(user_id: str, email: str) -> None:
     )
 
 
-@app.post("/api/auth/signup", response_model=TokenResponse)
+@app.post("/api/auth/signup", response_model=TokenResponse, dependencies=[Depends(rate_limit_signup)])
 def signup(body: SignupRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     invite = db.query(Invite).filter(Invite.code == body.invite_code).one_or_none()
     if invite is None or invite.used_at is not None:
@@ -220,7 +227,7 @@ def _send_password_reset_email(user_id: str, email: str, password_hash: str) -> 
     )
 
 
-@app.post("/api/auth/forgot-password")
+@app.post("/api/auth/forgot-password", dependencies=[Depends(rate_limit_forgot_password)])
 def forgot_password(body: ForgotPasswordRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """Always returns the same response regardless of whether the email exists --
     otherwise this endpoint becomes an account-enumeration oracle."""
@@ -251,7 +258,7 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     return TokenResponse(access_token=create_access_token(user.id))
 
 
-@app.post("/api/auth/login", response_model=TokenResponse)
+@app.post("/api/auth/login", response_model=TokenResponse, dependencies=[Depends(rate_limit_login)])
 def login(body: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == body.email).one_or_none()
     if user is None or not verify_password(body.password, user.password_hash):
