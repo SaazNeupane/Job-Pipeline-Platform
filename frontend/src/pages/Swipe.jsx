@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
-import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Loading from "../components/Loading.jsx";
 import { useApiData } from "../hooks/useApiData.js";
 import { sourceLabel } from "../sourceLabels.js";
@@ -85,12 +84,23 @@ export default function Swipe() {
   const [exiting, setExiting] = useState(null); // null | "like" | "reject"
   const [entering, setEntering] = useState(false);
   const [lastLiked, setLastLiked] = useState(null);
-  const [cleanupThreshold, setCleanupThreshold] = useState("");
-  const [cleanupConfirmOpen, setCleanupConfirmOpen] = useState(false);
-  const [cleanupBusy, setCleanupBusy] = useState(false);
+  // Reversible view filter, not a destructive action -- adjust freely (look
+  // at 70%+, then widen to 50%+) without ever changing what's actually
+  // queued. Postings below the threshold are hidden, not dismissed.
+  const [minMatchFilter, setMinMatchFilter] = useState(0);
 
-  const current = queue && queue.length ? queue[0] : null;
-  const next = queue && queue.length > 1 ? queue[1] : null;
+  const visibleQueue = useMemo(() => {
+    if (!queue) return queue;
+    if (minMatchFilter === 0) return queue;
+    return queue.filter((row) => {
+      const pct = matchPercent(row.match_score);
+      return pct === null || pct >= minMatchFilter;
+    });
+  }, [queue, minMatchFilter]);
+
+  const current = visibleQueue && visibleQueue.length ? visibleQueue[0] : null;
+  const next = visibleQueue && visibleQueue.length > 1 ? visibleQueue[1] : null;
+  const hiddenCount = (queue?.length || 0) - (visibleQueue?.length || 0);
 
   // The API call itself no longer gates the swipe animation -- the backend
   // now records a like/reject and (for likes) kicks off resume/cover-letter
@@ -105,13 +115,17 @@ export default function Swipe() {
     setError("");
     setExiting(direction);
 
-    const request = direction === "like" ? api.swipeLike(current.posting_key) : api.swipeReject(current.posting_key);
+    const decidedKey = current.posting_key;
+    const request = direction === "like" ? api.swipeLike(decidedKey) : api.swipeReject(decidedKey);
     request
       .then((result) => { if (direction === "like") setLastLiked(result.row); })
       .catch((e) => setError(e.message));
 
     setTimeout(() => {
-      setData((prev) => ({ ...prev, queue: prev.queue.slice(1) }));
+      // Remove by posting_key, not a blind slice(1) -- with the match-score
+      // filter active, the visible "current" card isn't necessarily index 0
+      // of the full underlying queue.
+      setData((prev) => ({ ...prev, queue: prev.queue.filter((row) => row.posting_key !== decidedKey) }));
       setExiting(null);
       // Next card starts painted in the "peek" pose (small/faded/behind)
       // then, one frame later, the "entering" class is dropped -- the
@@ -125,23 +139,6 @@ export default function Swipe() {
   }
   const like = () => decide("like");
   const reject = () => decide("reject");
-
-  async function doCleanup() {
-    setCleanupConfirmOpen(false);
-    const pct = parseFloat(cleanupThreshold);
-    if (Number.isNaN(pct)) return;
-    setCleanupBusy(true);
-    setError("");
-    try {
-      await api.cleanupQueue(pct / 100);
-      const fresh = await api.swipeQueue();
-      setData(fresh);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setCleanupBusy(false);
-    }
-  }
 
   useEffect(() => {
     function onKey(e) {
@@ -169,23 +166,15 @@ export default function Swipe() {
 
       {queue && queue.length > 0 && (
         <div className="cleanup-row">
-          <label>
-            Remove queued postings below
+          <label className="match-filter-label">
+            Show {minMatchFilter}% match and above
             <input
-              type="number" min="0" max="100" placeholder="e.g. 40"
-              value={cleanupThreshold}
-              onChange={(e) => setCleanupThreshold(e.target.value)}
-              style={{ width: "5em", margin: "0 0.4em" }}
+              type="range" min="0" max="100" step="5"
+              value={minMatchFilter}
+              onChange={(e) => setMinMatchFilter(Number(e.target.value))}
             />
-            % match
           </label>
-          <button
-            type="button" className="ghost"
-            onClick={() => setCleanupConfirmOpen(true)}
-            disabled={cleanupBusy || cleanupThreshold === "" || Number.isNaN(parseFloat(cleanupThreshold))}
-          >
-            {cleanupBusy ? "Cleaning up…" : "Clean up queue"}
-          </button>
+          {hiddenCount > 0 && <span className="hint">{hiddenCount} hidden below threshold</span>}
         </div>
       )}
 
@@ -208,21 +197,16 @@ export default function Swipe() {
               <button type="button" className="danger swipe-btn" onClick={reject} disabled={busy}>← Skip</button>
               <button type="button" className="primary swipe-btn" onClick={like} disabled={busy}>{busy ? "Working…" : "Like →"}</button>
             </div>
-            <p className="hint swipe-hint">{queue.length - 1} more after this · arrow keys work too</p>
+            <p className="hint swipe-hint">{visibleQueue.length - 1} more after this · arrow keys work too</p>
           </>
         ) : (
-          <div className="empty-state">Nothing waiting for a swipe right now. Check back after the next run.</div>
+          <div className="empty-state">
+            {hiddenCount > 0
+              ? `Nothing at ${minMatchFilter}% match or above right now. ${hiddenCount} hidden below that.`
+              : "Nothing waiting for a swipe right now. Check back after the next run."}
+          </div>
         )}
       </div>
-
-      <ConfirmDialog
-        open={cleanupConfirmOpen}
-        title="Clean up queue"
-        body={`Remove every queued posting below ${cleanupThreshold}% match? This can't be undone.`}
-        confirmLabel="Remove"
-        onConfirm={doCleanup}
-        onCancel={() => setCleanupConfirmOpen(false)}
-      />
     </>
   );
 }

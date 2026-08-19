@@ -741,7 +741,13 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .dash-head h1 { margin-bottom: 0.3rem; }
 .dash-head .lede { margin-bottom: 0; }
 .dash-head-links { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
-.cleanup-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+.cleanup-row { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1.5rem; }
+.match-filter-label { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.9rem; color: var(--ink-soft); width: 100%; }
+.match-filter-label input[type="range"] {
+  width: 100%;
+  accent-color: var(--redline);
+  height: 6px;
+}
 
 .stat-strip {
   display: flex;

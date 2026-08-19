@@ -27,7 +27,7 @@ from pipeline.config import load_profile, load_secrets
 from pipeline.cover_letter import get_cover_letter
 from pipeline.drive_storage import upload_resume
 from pipeline.filter import extract_required_years, posting_fingerprint
-from pipeline.postings_store import create_posting, get_existing_fingerprints, get_postings, get_posting, transition_posting, update_posting
+from pipeline.postings_store import create_posting, get_existing_fingerprints, get_posting, transition_posting, update_posting
 from pipeline.search import Posting
 from pipeline.tailor_resume import render_resume_pdf, reword_bullets_with_llm, tailor_resume
 from pipeline.writing_style import DEFAULT_MODEL_FALLBACKS, generate_with_gemini
@@ -281,21 +281,5 @@ def reject_posting(user: str, posting_key: str) -> None:
         "reason_held": "swiped_left",
         "dismissed_at": datetime.now().isoformat(timespec="seconds"),
     })
-
-
-def reject_postings_below_score(user: str, min_score: float) -> int:
-    """Bulk left-swipe for every currently-queued posting under min_score --
-    retroactive cleanup for a lane's min_match_score threshold (which only
-    ever gates FUTURE postings at filter time, see filter.py::filter_postings)
-    against postings that were already queued before the threshold was set.
-    Loops reject_posting() per match rather than a dedicated bulk-transition
-    query -- queue sizes are small (tens, not thousands) and reject_posting's
-    mirror write already routes through the shared single-worker
-    BACKGROUND_EXECUTOR, so looping it is safe, not a new threading risk."""
-    queued = get_postings(user, status="queued")
-    to_reject = [row["posting_key"] for row in queued if float(row.get("match_score") or 0) < min_score]
-    for posting_key in to_reject:
-        reject_posting(user, posting_key)
-    return len(to_reject)
 
     print(f"[swipe_actions] {posting_key} rejected -> dismissed_jobs.")

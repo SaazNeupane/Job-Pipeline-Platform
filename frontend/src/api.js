@@ -125,7 +125,6 @@ export const api = {
   swipeLike: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/like`),
   swipeReject: (postingKey) => post(`/api/swipe/${encodeURIComponent(postingKey)}/reject`),
   addManualPosting: (lane, text, url) => post("/api/swipe/manual", { lane, text, url }),
-  cleanupQueue: (minScore) => post("/api/swipe/clean-up", { min_score: minScore }),
 
   // -- dashboard --
   dashboard: () => get("/api/dashboard"),
