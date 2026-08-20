@@ -3,6 +3,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
   padding: 1rem 1.75rem;
   border-bottom: 1px solid var(--wire);
   background: var(--surface);
@@ -18,7 +20,12 @@
 .brand:hover { text-decoration: none; }
 .brand-mark { width: 30px; height: 30px; display: block; }
 .topbar-link { color: var(--ink-soft); font-size: 0.92rem; }
-.topbar-right { display: flex; align-items: center; gap: 1.25rem; }
+.topbar-link-active { color: var(--ink); font-weight: 600; }
+.topbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+@media (max-width: 640px) {
+  .topbar-right { gap: 0.4rem 0.85rem; }
+  .topbar-link { font-size: 0.86rem; }
+}
 .topbar-exit {
   background: none; border: none; padding: 0; font: inherit;
   color: var(--ink-faint); font-size: 0.92rem; cursor: pointer;
@@ -31,6 +38,13 @@
 }
 
 .container {
+  /* width:100% first -- main is now a flex item (see index.css's sticky-footer #root
+     rules), and a flex item with auto cross-axis margins alone shrinks to fit its content
+     instead of filling available width, which silently squashed every plain-content page
+     (login, signup, any short form) down to whatever its narrowest child happened to be.
+     Explicit width:100% before the margin:auto centering keeps the old fill-then-cap-then-
+     center behavior a normal block element gets for free. */
+  width: 100%;
   max-width: 760px;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 5rem;
@@ -39,11 +53,32 @@
 
 .site-footer {
   display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  padding: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding: 1.5rem 1.75rem;
   border-top: 1px solid var(--wire);
 }
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.footer-brand:hover { text-decoration: none; }
+.footer-tagline {
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: var(--ink-faint);
+  border-left: 1px solid var(--wire);
+  padding-left: 0.6rem;
+  margin-left: 0.2rem;
+}
+.footer-links { display: flex; gap: 1.5rem; }
+@media (max-width: 640px) { .footer-tagline { display: none; } }
 
 .outcome-select { width: auto; padding: 0.3rem 0.55rem; font-size: 0.82rem; }
 
@@ -98,6 +133,13 @@ button.ghost { background: transparent; color: var(--ink-soft); border-color: tr
    rather than a hard system outline -- calmer, and consistent with the
    glow already used on selected lane cards. */
 form { display: flex; flex-direction: column; gap: 1.4rem; }
+
+/* Login/signup/forgot/reset-password: plain top-left layout at the original full
+   .container width (no card, no vertical centering, no narrower cap -- all tried and
+   reverted). Just the vertical-rhythm fix: h1/form/hints used to sit almost flush
+   against each other with no lede paragraph between them to create breathing room. */
+.auth-form h1 { margin-bottom: 1.75rem; }
+.auth-form form { margin-bottom: 1.5rem; }
 /* Scoped to plain field labels only -- .checkbox-row/.lane-card/.posting-select
    are option labels wrapping their own text+control combo, not a
    label-above-input pair, and keep their own normal-weight body typography
@@ -433,6 +475,7 @@ legend {
 
 /* Landing page --------------------------------------------------------- */
 .hero { padding: 1.5rem 0 2.5rem; }
+.hero-badge { margin-bottom: 0.8rem; }
 
 /* Sequenced hero reveal: the prompt line types itself out (see Home.jsx's
    useTypewriter), then this class stages in the headline/lede/actions one
@@ -544,6 +587,18 @@ legend {
 /* Guide section, folded into the landing page below the hero -------------- */
 .guide-section { margin-top: 3rem; padding-top: 2.5rem; border-top: 1px solid var(--wire); }
 .guide-heading { margin-top: 0.3rem; }
+
+.guide-stats { margin-top: 2rem; }
+.guide-feature-grid { margin: 1.75rem 0 0.9rem; }
+.guide-feature-tile { display: flex; flex-direction: column; gap: 0.6rem; }
+.guide-feature-title { margin: 0; font-size: 1rem; }
+.guide-feature-body { margin: 0; color: var(--ink-soft); font-size: 0.88rem; line-height: 1.45; }
+.guide-feature-note { max-width: 68ch; }
+
+.guide-ongoing-grid { margin: 1.25rem 0 2.5rem; }
+.guide-ongoing-card { margin-bottom: 0; }
+.guide-ongoing-badges { margin-bottom: 1rem; }
+.guide-ongoing-body { margin: 0; color: var(--ink-soft); font-size: 0.9rem; }
 
 .guide-steps { list-style: none; margin: 2rem 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
 .guide-step {

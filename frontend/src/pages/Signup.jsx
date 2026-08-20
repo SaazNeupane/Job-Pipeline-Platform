@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import PasswordField from "../components/PasswordField.jsx";
 
@@ -9,8 +9,10 @@ export default function Signup() {
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const { signup } = useAuth();
+  const { user, signup } = useAuth();
   const navigate = useNavigate();
+
+  if (user) return <Navigate to="/dashboard" replace />;
 
   async function submit(e) {
     e.preventDefault();
@@ -27,7 +29,7 @@ export default function Signup() {
   }
 
   return (
-    <>
+    <div className="auth-form">
       <h1>Create your account</h1>
       {error && <p className="error-banner">{error}</p>}
       <form onSubmit={submit}>
@@ -43,6 +45,6 @@ export default function Signup() {
         <Link to="/privacy">Privacy Policy</Link>.
       </p>
       <p className="hint">Already have an account? <Link to="/login">Log in</Link></p>
-    </>
+    </div>
   );
 }

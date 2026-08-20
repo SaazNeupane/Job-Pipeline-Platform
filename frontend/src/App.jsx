@@ -22,19 +22,34 @@ import Keys from "./wizard/steps/Keys.jsx";
 import Google from "./wizard/steps/Google.jsx";
 import Review from "./wizard/steps/Review.jsx";
 import Done from "./wizard/steps/Done.jsx";
+import Admin from "./pages/Admin.jsx";
 import { useAuth } from "./auth/AuthContext.jsx";
 import ProtectedRoute from "./auth/ProtectedRoute.jsx";
+import AdminRoute from "./auth/AdminRoute.jsx";
+
+function NavLink({ to, children }) {
+  const { pathname } = useLocation();
+  const active = pathname === to || pathname.startsWith(`${to}/`);
+  return (
+    <Link to={to} className={`topbar-link${active ? " topbar-link-active" : ""}`}>
+      {children}
+    </Link>
+  );
+}
 
 function AccountLink() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   if (!user) {
-    return <Link to="/login" className="topbar-link">Log in</Link>;
+    return <NavLink to="/login">Log in</NavLink>;
   }
   return (
     <>
-      <Link to="/dashboard" className="topbar-link">Dashboard</Link>
+      <NavLink to="/dashboard">Dashboard</NavLink>
+      <NavLink to="/swipe">Swipe</NavLink>
+      <NavLink to="/cold-email">Cold email</NavLink>
+      {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
       <button
         type="button" className="topbar-link topbar-exit"
         onClick={() => { logout(); navigate("/"); }}
@@ -74,7 +89,7 @@ function VerifyEmailBanner() {
 export default function App() {
   const location = useLocation();
   const pathname = location.pathname;
-  const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/swipe") || pathname.startsWith("/cold-email");
+  const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/swipe") || pathname.startsWith("/cold-email") || pathname.startsWith("/admin");
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -124,11 +139,19 @@ export default function App() {
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/swipe" element={<ProtectedRoute><Swipe /></ProtectedRoute>} />
           <Route path="/cold-email" element={<ProtectedRoute><ColdEmail /></ProtectedRoute>} />
+          <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
         </Routes>
       </main>
       <footer className="site-footer">
-        <Link to="/terms" className="topbar-link">Terms</Link>
-        <Link to="/privacy" className="topbar-link">Privacy</Link>
+        <Link to="/" className="footer-brand">
+          <Logo size={20} />
+          <span>Crond</span>
+          <span className="footer-tagline">Your job search, running itself.</span>
+        </Link>
+        <div className="footer-links">
+          <Link to="/terms" className="topbar-link">Terms</Link>
+          <Link to="/privacy" className="topbar-link">Privacy</Link>
+        </div>
       </footer>
     </>
   );

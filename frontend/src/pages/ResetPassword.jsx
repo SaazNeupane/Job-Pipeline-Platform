@@ -28,16 +28,16 @@ export default function ResetPassword() {
 
   if (!token) {
     return (
-      <>
+      <div className="auth-form">
         <h1>Reset password</h1>
         <p className="error-banner">This link is missing its token. Request a new one.</p>
         <p className="hint"><Link to="/forgot-password">Request a new link</Link></p>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="auth-form">
       <h1>Choose a new password</h1>
       {error && <p className="error-banner">{error}</p>}
       <form onSubmit={submit}>
@@ -46,6 +46,6 @@ export default function ResetPassword() {
           <button type="submit" className="primary" disabled={busy}>{busy ? "Saving…" : "Save new password"}</button>
         </div>
       </form>
-    </>
+    </div>
   );
 }

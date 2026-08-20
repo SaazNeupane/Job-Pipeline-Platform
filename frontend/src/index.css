@@ -110,6 +110,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Sticky footer: #root fills at least the viewport height and lays its children
+   (topbar/main/footer, see App.jsx's top-level fragment) out in a column, with main
+   growing to fill whatever's left -- otherwise a short page (login, a bare wizard step)
+   leaves the footer floating right under the content with a dead void underneath it
+   instead of pinned to the bottom of the screen. */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+#root > main {
+  flex: 1 0 auto;
+}
+
 /* Faint scanline texture, dark mode only -- a real CRT/terminal cue, quiet
    enough to read as texture rather than decoration. Skipped in light mode,
    where it would just look like a bug. */

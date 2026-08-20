@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext.jsx";
 import PasswordField from "../components/PasswordField.jsx";
 
@@ -8,8 +8,10 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  if (user) return <Navigate to="/dashboard" replace />;
 
   async function submit(e) {
     e.preventDefault();
@@ -26,7 +28,7 @@ export default function Login() {
   }
 
   return (
-    <>
+    <div className="auth-form">
       <h1>Log in</h1>
       {error && <p className="error-banner">{error}</p>}
       <form onSubmit={submit}>
@@ -38,6 +40,6 @@ export default function Login() {
       </form>
       <p className="hint">No account yet? <Link to="/signup">Sign up</Link></p>
       <p className="hint"><Link to="/forgot-password">Forgot your password?</Link></p>
-    </>
+    </div>
   );
 }

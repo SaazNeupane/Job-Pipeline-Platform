@@ -20,16 +20,16 @@ export default function ForgotPassword() {
 
   if (sent) {
     return (
-      <>
+      <div className="auth-form">
         <h1>Check your email</h1>
         <p>If an account exists for {email}, a password reset link is on its way. It expires in 30 minutes.</p>
         <p className="hint"><Link to="/login">Back to log in</Link></p>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
+    <div className="auth-form">
       <h1>Forgot password</h1>
       <p>Enter your email and we'll send you a link to reset your password.</p>
       <form onSubmit={submit}>
@@ -39,6 +39,6 @@ export default function ForgotPassword() {
         </div>
       </form>
       <p className="hint"><Link to="/login">Back to log in</Link></p>
-    </>
+    </div>
   );
 }
