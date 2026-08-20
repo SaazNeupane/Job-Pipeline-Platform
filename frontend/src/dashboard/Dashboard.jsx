@@ -628,7 +628,12 @@ export default function Dashboard() {
               <thead><tr><th>Date</th><th>New to swipe</th><th>Ready to apply</th><th>Applied</th><th>Emails</th><th>Errors</th></tr></thead>
               <tbody>
                 {[...data.summary].slice(-14).reverse().map((row, i) => {
-                  const isEmpty = !row.errors && !row.queued_count && !row.awaiting_apply_count && !row.applied_count && !row.emails_sent;
+                  // row.errors is always a numeric string ("0", "1", ...) -- build_daily_summary
+                  // (backend/pipeline/daily_report.py) writes str(len(errors)), never "". A plain
+                  // truthiness check on the string treats "0" the same as "3", so it has to be
+                  // compared numerically here, not just checked for emptiness.
+                  const errorCount = Number(row.errors) || 0;
+                  const isEmpty = !errorCount && !row.queued_count && !row.awaiting_apply_count && !row.applied_count && !row.emails_sent;
                   const emptyReason = !row.total_postings_found
                     ? "no postings found"
                     : !row.total_matched
@@ -642,8 +647,8 @@ export default function Dashboard() {
                       <td>{row.applied_count}</td>
                       <td>{row.emails_sent}</td>
                       <td>
-                        {row.errors
-                          ? <span className="badge amber">{row.errors}</span>
+                        {errorCount
+                          ? <span className="badge amber">{errorCount}</span>
                           : isEmpty
                             ? <span className="badge danger" title={emptyReason}>{emptyReason}</span>
                             : <span className="hint">none</span>}
