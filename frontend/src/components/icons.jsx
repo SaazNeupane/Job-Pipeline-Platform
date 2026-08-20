@@ -32,3 +32,9 @@ export const MailIcon = () => (
 export const RunsIcon = () => (
   <svg {...ICON_PROPS}><circle cx="12" cy="12" r="8.5" /><path d="M12 7v5.5l3.5 2" /></svg>
 );
+export const MenuIcon = () => (
+  <svg {...ICON_PROPS}><path d="M4 6.5h16M4 12h16M4 17.5h16" /></svg>
+);
+export const CloseIcon = () => (
+  <svg {...ICON_PROPS}><path d="M5 5l14 14M19 5L5 19" /></svg>
+);

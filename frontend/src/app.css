@@ -22,9 +22,33 @@
 .topbar-link { color: var(--ink-soft); font-size: 0.92rem; }
 .topbar-link-active { color: var(--ink); font-weight: 600; }
 .topbar-right { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+.topbar-menu-toggle {
+  display: none;
+  background: none; border: none; padding: 0.3rem; margin: 0;
+  color: var(--ink);
+}
 @media (max-width: 640px) {
-  .topbar-right { gap: 0.4rem 0.85rem; }
-  .topbar-link { font-size: 0.86rem; }
+  .topbar { padding: 0.85rem 1.1rem; }
+  .topbar-menu-toggle { display: flex; }
+  .topbar-right {
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    flex-basis: 100%;
+    order: 3;
+    margin-top: 0.6rem;
+    border-top: 1px solid var(--wire);
+  }
+  .topbar-right.topbar-right-open { display: flex; }
+  .topbar-right .topbar-link,
+  .topbar-right .topbar-exit {
+    padding: 0.75rem 0.2rem;
+    border-bottom: 1px solid var(--wire);
+    font-size: 0.94rem;
+  }
+  .topbar-right .topbar-link:last-child,
+  .topbar-right .topbar-exit:last-child { border-bottom: none; }
 }
 .topbar-exit {
   background: none; border: none; padding: 0; font: inherit;

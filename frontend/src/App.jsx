@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api.js";
 import Logo from "./components/Logo.jsx";
+import { MenuIcon, CloseIcon } from "./components/icons.jsx";
 import ToastHost from "./components/ToastHost.jsx";
 import { showToast } from "./toast.js";
 import Home from "./pages/Home.jsx";
@@ -27,32 +28,32 @@ import { useAuth } from "./auth/AuthContext.jsx";
 import ProtectedRoute from "./auth/ProtectedRoute.jsx";
 import AdminRoute from "./auth/AdminRoute.jsx";
 
-function NavLink({ to, children }) {
+function NavLink({ to, children, onNavigate }) {
   const { pathname } = useLocation();
   const active = pathname === to || pathname.startsWith(`${to}/`);
   return (
-    <Link to={to} className={`topbar-link${active ? " topbar-link-active" : ""}`}>
+    <Link to={to} className={`topbar-link${active ? " topbar-link-active" : ""}`} onClick={onNavigate}>
       {children}
     </Link>
   );
 }
 
-function AccountLink() {
+function AccountLink({ onNavigate }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   if (!user) {
-    return <NavLink to="/login">Log in</NavLink>;
+    return <NavLink to="/login" onNavigate={onNavigate}>Log in</NavLink>;
   }
   return (
     <>
-      <NavLink to="/dashboard">Dashboard</NavLink>
-      <NavLink to="/swipe">Swipe</NavLink>
-      <NavLink to="/cold-email">Cold email</NavLink>
-      {user.is_admin && <NavLink to="/admin">Admin</NavLink>}
+      <NavLink to="/dashboard" onNavigate={onNavigate}>Dashboard</NavLink>
+      <NavLink to="/swipe" onNavigate={onNavigate}>Swipe</NavLink>
+      <NavLink to="/cold-email" onNavigate={onNavigate}>Cold email</NavLink>
+      {user.is_admin && <NavLink to="/admin" onNavigate={onNavigate}>Admin</NavLink>}
       <button
         type="button" className="topbar-link topbar-exit"
-        onClick={() => { logout(); navigate("/"); }}
+        onClick={() => { onNavigate?.(); logout(); navigate("/"); }}
       >
         Log out
       </button>
@@ -90,6 +91,11 @@ export default function App() {
   const location = useLocation();
   const pathname = location.pathname;
   const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/swipe") || pathname.startsWith("/cold-email") || pathname.startsWith("/admin");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -111,9 +117,18 @@ export default function App() {
           <Logo />
           Crond
         </Link>
-        <div className="topbar-right">
-          <Link to="/#guide" className="topbar-link">Guide</Link>
-          <AccountLink />
+        <button
+          type="button"
+          className="topbar-menu-toggle"
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <CloseIcon /> : <MenuIcon />}
+        </button>
+        <div className={`topbar-right${menuOpen ? " topbar-right-open" : ""}`}>
+          <Link to="/#guide" className="topbar-link" onClick={() => setMenuOpen(false)}>Guide</Link>
+          <AccountLink onNavigate={() => setMenuOpen(false)} />
         </div>
       </header>
       <main className={`container${isDashboard ? " wide" : ""}`}>
