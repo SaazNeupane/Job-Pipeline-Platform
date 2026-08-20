@@ -29,6 +29,12 @@ const SOURCE_LABELS = {
   greenhouse: "Greenhouse (startup/tech company job boards)",
   lever: "Lever (startup/tech company job boards)",
   ashby: "Ashby (startup/tech company job boards)",
+  workday: "Workday (enterprise company job boards)",
+  smartrecruiters: "SmartRecruiters (company job boards)",
+  workable: "Workable (company job boards)",
+  recruitee: "Recruitee (company job boards)",
+  breezy: "Breezy (company job boards)",
+  company_site: "Company career pages (sitemap-discovered, no ATS needed)",
 };
 
 // One small icon per built-in preset, purely decorative -- breaks up what
@@ -64,6 +70,12 @@ export default function Lanes() {
   const [greenhouseBoards, setGreenhouseBoards] = useState((draft.greenhouse_boards || []).join(", "));
   const [leverCompanies, setLeverCompanies] = useState((draft.lever_companies || []).join(", "));
   const [ashbyBoards, setAshbyBoards] = useState((draft.ashby_boards || []).join(", "));
+  const [workdayBoards, setWorkdayBoards] = useState((draft.workday_boards || []).join(", "));
+  const [smartrecruitersCompanies, setSmartrecruitersCompanies] = useState((draft.smartrecruiters_companies || []).join(", "));
+  const [workableAccounts, setWorkableAccounts] = useState((draft.workable_accounts || []).join(", "));
+  const [recruiteeCompanies, setRecruiteeCompanies] = useState((draft.recruitee_companies || []).join(", "));
+  const [breezyCompanies, setBreezyCompanies] = useState((draft.breezy_companies || []).join(", "));
+  const [companySiteTrackers, setCompanySiteTrackers] = useState((draft.company_site_trackers || []).join(", "));
   const [adzunaCountry, setAdzunaCountry] = useState(draft.adzuna_country || "ca");
   const [targetCountries, setTargetCountries] = useState((draft.target_countries || []).join(", "));
   const [targetRegions, setTargetRegions] = useState((draft.target_regions || []).join(", "));
@@ -151,6 +163,12 @@ export default function Lanes() {
         greenhouse_boards: csv(greenhouseBoards),
         lever_companies: csv(leverCompanies),
         ashby_boards: csv(ashbyBoards),
+        workday_boards: csv(workdayBoards),
+        smartrecruiters_companies: csv(smartrecruitersCompanies),
+        workable_accounts: csv(workableAccounts),
+        recruitee_companies: csv(recruiteeCompanies),
+        breezy_companies: csv(breezyCompanies),
+        company_site_trackers: csv(companySiteTrackers),
         adzuna_country: adzunaCountry.trim().toLowerCase(),
         target_countries: csv(targetCountries).map((c) => c.toLowerCase()),
         target_regions: csv(targetRegions).map((r) => r.toLowerCase()),
@@ -294,6 +312,30 @@ export default function Lanes() {
           <label>
             Ashby boards to search (comma-separated, e.g. "linear" for jobs.ashbyhq.com/linear)
             <input value={ashbyBoards} onChange={(e) => setAshbyBoards(e.target.value)} placeholder="Leave blank to use our default list: ramp, linear, notion, openai, substack" />
+          </label>
+          <label>
+            Workday boards to search (comma-separated "host/tenant/site" entries, e.g. "workday.wd5.myworkdayjobs.com/workday/Workday")
+            <input value={workdayBoards} onChange={(e) => setWorkdayBoards(e.target.value)} placeholder="Blank = source skipped" />
+          </label>
+          <label>
+            SmartRecruiters companies to search (comma-separated, e.g. "Visa")
+            <input value={smartrecruitersCompanies} onChange={(e) => setSmartrecruitersCompanies(e.target.value)} placeholder="Blank = source skipped" />
+          </label>
+          <label>
+            Workable accounts to search (comma-separated subdomains)
+            <input value={workableAccounts} onChange={(e) => setWorkableAccounts(e.target.value)} placeholder="Blank = source skipped" />
+          </label>
+          <label>
+            Recruitee companies to search (comma-separated subdomains, e.g. "spreadgroup" for spreadgroup.recruitee.com)
+            <input value={recruiteeCompanies} onChange={(e) => setRecruiteeCompanies(e.target.value)} placeholder="Blank = source skipped" />
+          </label>
+          <label>
+            Breezy companies to search (comma-separated subdomains)
+            <input value={breezyCompanies} onChange={(e) => setBreezyCompanies(e.target.value)} placeholder="Blank = source skipped" />
+          </label>
+          <label>
+            Company career pages to track, no ATS needed (comma-separated "company name|https://company.com" entries -- discovers job pages via the company's own sitemap)
+            <input value={companySiteTrackers} onChange={(e) => setCompanySiteTrackers(e.target.value)} placeholder='e.g. "Acme Inc|https://acme.com"' />
           </label>
           <label>
             Adzuna country code (2 letters, e.g. "ca" for Canada, "us" for United States)

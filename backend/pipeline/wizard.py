@@ -14,7 +14,10 @@ import re
 from datetime import date
 from io import BytesIO
 
-SOURCE_OPTIONS = ["adzuna", "hiring_cafe", "greenhouse", "lever", "ashby"]
+SOURCE_OPTIONS = [
+    "adzuna", "hiring_cafe", "greenhouse", "lever", "ashby",
+    "workday", "smartrecruiters", "workable", "recruitee", "breezy", "company_site",
+]
 REMOTE_TYPE_OPTIONS = ["remote", "hybrid", "onsite"]
 EMPLOYMENT_TYPE_OPTIONS = ["full_time", "part_time", "contract"]
 
@@ -259,6 +262,12 @@ def build_profile_yaml_dict(
     report_email: str,
     lever_companies: list[str] | None = None,
     ashby_boards: list[str] | None = None,
+    workday_boards: list[str] | None = None,
+    smartrecruiters_companies: list[str] | None = None,
+    workable_accounts: list[str] | None = None,
+    recruitee_companies: list[str] | None = None,
+    breezy_companies: list[str] | None = None,
+    company_site_trackers: list[str] | None = None,
     target_countries: list[str] | None = None,
     target_regions: list[str] | None = None,
     apply_daily_cap: int = 15,
@@ -278,6 +287,16 @@ def build_profile_yaml_dict(
         "greenhouse_boards": greenhouse_boards or list(DEFAULT_GREENHOUSE_BOARDS),
         "lever_companies": lever_companies or list(DEFAULT_LEVER_COMPANIES),
         "ashby_boards": ashby_boards or list(DEFAULT_ASHBY_BOARDS),
+        # No lane preset ships a default company for these -- unlike greenhouse/lever/
+        # ashby, they're opt-in board lists a user has to actually type in, empty until
+        # then (run_pipeline.py skips a source with no boards configured, same as
+        # before promotion).
+        "workday_boards": workday_boards or [],
+        "smartrecruiters_companies": smartrecruiters_companies or [],
+        "workable_accounts": workable_accounts or [],
+        "recruitee_companies": recruitee_companies or [],
+        "breezy_companies": breezy_companies or [],
+        "company_site_trackers": company_site_trackers or [],
         "adzuna_country": adzuna_country or "ca",
         "target_countries": target_countries or [adzuna_country or "ca"],
         "target_regions": target_regions or [],

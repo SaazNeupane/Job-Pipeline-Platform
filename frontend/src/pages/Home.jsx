@@ -10,14 +10,14 @@ import { useTypewriter } from "../hooks/useTypewriter.js";
 // SOURCE_OPTIONS -- there's no client-side API call on the landing page (it's public,
 // unauthenticated) to pull these live, so these three are the one thing on this page
 // that can drift if either list changes without a matching edit here.
-const SOURCE_COUNT = 5;
+const SOURCE_COUNT = 11;
 const LANE_PRESET_COUNT = 17;
 
 const FEATURES = [
   {
     icon: <SearchIcon />,
     title: "Search & filter",
-    body: "Every day, real postings from Adzuna, Greenhouse, Lever, Ashby, and hiring.cafe get filtered down to matches for the job types you set up. None of it comes from a site that doesn't allow scraping.",
+    body: "Every day, real postings from Adzuna, hiring.cafe, and 9 different company job-board systems (Greenhouse, Lever, Ashby, Workday, SmartRecruiters, Workable, Recruitee, Breezy, plus direct company career-page tracking) get filtered down to matches for the job types you set up. None of it comes from a site that doesn't allow scraping.",
   },
   {
     icon: <SwipeIcon />,

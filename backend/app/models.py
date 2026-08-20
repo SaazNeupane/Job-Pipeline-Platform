@@ -65,6 +65,17 @@ class Profile(Base):
     greenhouse_boards_json: Mapped[list] = mapped_column(JSON, default=list)
     lever_companies_json: Mapped[list] = mapped_column(JSON, default=list)
     ashby_boards_json: Mapped[list] = mapped_column(JSON, default=list)
+    # Promoted from env-var-configured spikes (see search.py/run_pipeline.py's own
+    # comments on each search_* function for the real live-verification notes per
+    # source) -- same "host/tenant/site" / bare-company-slug / "name|https://..." string
+    # shapes their search_* functions already expect, just DB-backed + wizard-editable
+    # now instead of comma-split env vars only reachable via manual DB/env edits.
+    workday_boards_json: Mapped[list] = mapped_column(JSON, default=list)
+    smartrecruiters_companies_json: Mapped[list] = mapped_column(JSON, default=list)
+    workable_accounts_json: Mapped[list] = mapped_column(JSON, default=list)
+    recruitee_companies_json: Mapped[list] = mapped_column(JSON, default=list)
+    breezy_companies_json: Mapped[list] = mapped_column(JSON, default=list)
+    company_site_trackers_json: Mapped[list] = mapped_column(JSON, default=list)
     target_countries_json: Mapped[list] = mapped_column(JSON, default=lambda: ["ca"])
     target_regions_json: Mapped[list] = mapped_column(JSON, default=list)
     # lane name -> parsed resume JSON dict (build_resume_json()'s output), replaces the old

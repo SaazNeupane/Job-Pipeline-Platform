@@ -102,6 +102,15 @@ class Profile:
     greenhouse_boards: list[str] = field(default_factory=list)
     lever_companies: list[str] = field(default_factory=list)
     ashby_boards: list[str] = field(default_factory=list)
+    # Promoted from env-var spikes (WORKDAY_BOARDS/SMARTRECRUITERS_COMPANIES/etc in
+    # run_pipeline.py, pre-promotion) -- same string shapes their search_* functions
+    # in search.py already expect.
+    workday_boards: list[str] = field(default_factory=list)
+    smartrecruiters_companies: list[str] = field(default_factory=list)
+    workable_accounts: list[str] = field(default_factory=list)
+    recruitee_companies: list[str] = field(default_factory=list)
+    breezy_companies: list[str] = field(default_factory=list)
+    company_site_trackers: list[str] = field(default_factory=list)
     adzuna_country: str = "us"
     target_countries: list[str] = field(default_factory=lambda: ["ca"])
     # Optional finer filter within target_countries -- province/state codes or names
@@ -141,6 +150,12 @@ def load_profile(user: str) -> Profile:
         greenhouse_boards=list(row.greenhouse_boards_json or []),
         lever_companies=list(row.lever_companies_json or []),
         ashby_boards=list(row.ashby_boards_json or []),
+        workday_boards=list(row.workday_boards_json or []),
+        smartrecruiters_companies=list(row.smartrecruiters_companies_json or []),
+        workable_accounts=list(row.workable_accounts_json or []),
+        recruitee_companies=list(row.recruitee_companies_json or []),
+        breezy_companies=list(row.breezy_companies_json or []),
+        company_site_trackers=list(row.company_site_trackers_json or []),
         adzuna_country=row.adzuna_country or "us",
         target_countries=list(row.target_countries_json or ["ca"]),
         target_regions=list(row.target_regions_json or []),

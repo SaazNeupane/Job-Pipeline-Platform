@@ -35,7 +35,19 @@ from pipeline.daily_report import build_daily_summary, send_daily_report
 from pipeline.drive_storage import cleanup_old_files
 from pipeline.filter import RECENCY_MAX_AGE_DAYS, filter_postings, posting_fingerprint
 from pipeline.postings_store import get_existing_dedupe_keys, get_existing_fingerprints
-from pipeline.search import search_adzuna, search_ashby, search_greenhouse, search_hiring_cafe, search_lever, search_workday
+from pipeline.search import (
+    search_adzuna,
+    search_ashby,
+    search_breezy,
+    search_company_sites,
+    search_greenhouse,
+    search_hiring_cafe,
+    search_lever,
+    search_recruitee,
+    search_smartrecruiters,
+    search_workable,
+    search_workday,
+)
 from pipeline.swipe_actions import queue_for_swipe
 
 
@@ -105,19 +117,49 @@ def run(
         result = _try("search_ashby", search_ashby, profile.ashby_boards)
         all_postings.extend(result or [])
 
-    # Backend-only spike (2026-08-18): no DB column/wizard/frontend field for Workday
-    # boards yet (deliberately, per explicit scope decision) — configured via a
-    # comma-separated WORKDAY_BOARDS env var ("host/tenant/site" entries) instead of
-    # profile-level config, same as every other source's board list would be. Promote
-    # to a real profile.workday_boards column + wizard field once this is validated
-    # against real data.
     if "workday" in sources_needed:
-        workday_boards = [b.strip() for b in os.environ.get("WORKDAY_BOARDS", "").split(",") if b.strip()]
-        if workday_boards:
-            result = _try("search_workday", search_workday, workday_boards)
+        if profile.workday_boards:
+            result = _try("search_workday", search_workday, profile.workday_boards)
             all_postings.extend(result or [])
         else:
-            errors.append("search_workday: WORKDAY_BOARDS not set, skipped")
+            errors.append("search_workday: no workday_boards configured, skipped")
+
+    if "smartrecruiters" in sources_needed:
+        if profile.smartrecruiters_companies:
+            result = _try("search_smartrecruiters", search_smartrecruiters, profile.smartrecruiters_companies)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_smartrecruiters: no smartrecruiters_companies configured, skipped")
+
+    if "workable" in sources_needed:
+        if profile.workable_accounts:
+            result = _try("search_workable", search_workable, profile.workable_accounts)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_workable: no workable_accounts configured, skipped")
+
+    if "recruitee" in sources_needed:
+        if profile.recruitee_companies:
+            result = _try("search_recruitee", search_recruitee, profile.recruitee_companies)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_recruitee: no recruitee_companies configured, skipped")
+
+    if "breezy" in sources_needed:
+        if profile.breezy_companies:
+            result = _try("search_breezy", search_breezy, profile.breezy_companies)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_breezy: no breezy_companies configured, skipped")
+
+    # Track 2: no-ATS fallback (sitemap/robots.txt-discovered job pages, see
+    # search.py's search_company_sites docstring).
+    if "company_site" in sources_needed:
+        if profile.company_site_trackers:
+            result = _try("search_company_sites", search_company_sites, profile.company_site_trackers)
+            all_postings.extend(result or [])
+        else:
+            errors.append("search_company_sites: no company_site_trackers configured, skipped")
 
     if "hiring_cafe" in sources_needed:
         hiring_cafe_keywords = sorted({kw for lane in lanes if "hiring_cafe" in lane.sources for kw in lane.keywords})
