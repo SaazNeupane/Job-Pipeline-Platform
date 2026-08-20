@@ -6,7 +6,7 @@ export default function Terms() {
 
       <p>
         Crond is a small, invite-only project, not a funded company. These terms are short on
-        purpose — the goal is an honest description of what you're agreeing to, not a wall of
+        purpose: the goal is an honest description of what you're agreeing to, not a wall of
         boilerplate.
       </p>
 
@@ -21,7 +21,7 @@ export default function Terms() {
       <h2>No warranty</h2>
       <p>
         Provided as-is, with no guarantee of uptime, accuracy, or availability. Job matches,
-        generated resume/cover-letter content, and cold-email outreach are AI-assisted —
+        generated resume/cover-letter content, and cold-email outreach are AI-assisted, so
         review everything before it goes out under your name. This app is not responsible for
         the outcome of any job application, email sent, or account action taken through it.
       </p>
@@ -30,8 +30,8 @@ export default function Terms() {
       <ul>
         <li>You're responsible for the accuracy of your own resume/profile data.</li>
         <li>You're responsible for reviewing generated content before it's sent or submitted anywhere.</li>
-        <li>You're responsible for how you configure cold-email volume — it sends through your own Gmail account and affects your own account's standing with Google.</li>
-        <li>Invite codes are for people you trust to use this reasonably — don't share your account.</li>
+        <li>You're responsible for how you configure cold-email volume: it sends through your own Gmail account and affects your own account's standing with Google.</li>
+        <li>Invite codes are for people you trust to use this reasonably. Don't share your account.</li>
       </ul>
 
       <h2>Account and data</h2>
@@ -45,14 +45,14 @@ export default function Terms() {
       <p>
         Access may be suspended or revoked for abuse (of this app, of Google's APIs, of job
         boards, or of contacts found via cold email) or if this project is discontinued. This
-        is a small, actively-developed project — features and availability can change.
+        is a small, actively-developed project, and features and availability can change.
       </p>
 
       <h2>Changes</h2>
       <p>Updated in place if anything material changes, with the date above kept current.</p>
 
       <h2>Contact</h2>
-      <p>Saaz Neupane — <a href="mailto:saazneu789@gmail.com">saazneu789@gmail.com</a></p>
+      <p>Saaz Neupane, <a href="mailto:saazneu789@gmail.com">saazneu789@gmail.com</a></p>
     </div>
   );
 }

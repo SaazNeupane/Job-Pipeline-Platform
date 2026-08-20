@@ -1,9 +1,40 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ApplyIcon, FilterIcon, SearchIcon, SwipeIcon, TailorIcon } from "../components/icons.jsx";
+import { ApplyIcon, CheckCircleIcon, FilterIcon, InboxIcon, MailIcon, RunsIcon, SearchIcon, SwipeIcon, TailorIcon } from "../components/icons.jsx";
+import StatItem from "../components/StatItem.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { useInViewport } from "../hooks/useInViewport.js";
 import { useTypewriter } from "../hooks/useTypewriter.js";
+
+// Kept in sync by hand with backend/pipeline/wizard.py's LANE_TEMPLATES and
+// SOURCE_OPTIONS -- there's no client-side API call on the landing page (it's public,
+// unauthenticated) to pull these live, so these three are the one thing on this page
+// that can drift if either list changes without a matching edit here.
+const SOURCE_COUNT = 5;
+const LANE_PRESET_COUNT = 17;
+
+const FEATURES = [
+  {
+    icon: <SearchIcon />,
+    title: "Search & filter",
+    body: "Every day, real postings from Adzuna, Greenhouse, Lever, Ashby, and hiring.cafe get filtered down to matches for the job types you set up. None of it comes from a site that doesn't allow scraping.",
+  },
+  {
+    icon: <SwipeIcon />,
+    title: "Swipe & tailor",
+    body: "Swipe right and it tailors your resume and writes a cover letter for that posting. Not sure why something matched? A \"Why this fits\" button on any card explains it, on demand.",
+  },
+  {
+    icon: <RunsIcon />,
+    title: "Your dashboard",
+    body: "Needs review, applied, interview rate, and a log of every run land in one place. Found a posting yourself? Paste it in and it's tailored the same way a swipe would be.",
+  },
+  {
+    icon: <MailIcon />,
+    title: "Cold email",
+    body: "A separate pipeline that only emails a real, published contact it verified can receive mail (never a guessed address), and tracks every reply and bounce.",
+  },
+];
 
 // auto: true for the two stages the daily cron actually runs itself (search, filter) and
 // the one it runs the instant you swipe right (tailor) -- these "complete" with a fake but
@@ -27,7 +58,7 @@ const SETUP_STEPS = [
   {
     n: "02",
     title: "Job types (lanes)",
-    body: "A lane is a category of job to search for, with its own keywords, filters, and tailored resume. Pick ready-made presets, build your own, or both. Presets aren't all-or-nothing: drop any keyword you don't want, like \"baker\" instead of every food-service role, or add your own. Each lane can target a different country, remote/onsite preference, salary range, and set of sources.",
+    body: "A lane is a category of job to search for, with its own keywords, filters, and tailored resume. Pick ready-made presets, build your own, or both: IT support, warehouse work, even New Grad / Co-op / Internship, which caps postings at 1 year of required experience so senior roles don't clutter your queue. Presets aren't all-or-nothing: drop any keyword you don't want, like \"baker\" instead of every food-service role, or add your own. Each lane can target a different country, remote/onsite preference, salary range, and set of sources.",
   },
   {
     n: "03",
@@ -123,6 +154,7 @@ export default function Home() {
   return (
     <>
       <div className="hero">
+        <span className="badge pine hero-badge">NEW: New Grad / Co-op / Internship lane</span>
         <TerminalWindow>
           <p className="terminal-line">
             <span className="terminal-prompt">$</span> {promptShown}
@@ -176,19 +208,25 @@ export default function Home() {
           in one place, worth a read before you start.
         </p>
 
-        <div className="card">
-          <h3 style={{ marginTop: 0 }}>What it actually does</h3>
-          <p style={{ marginBottom: 0 }}>
-            Every day, this searches real job postings (Adzuna, Greenhouse, Lever, Ashby, hiring.cafe)
-            and filters them down to real matches for the lanes you set up. Those land in a swipe
-            queue: go through them one at a time, right for "I'd apply to this," left for "no."
-            Right-swipe a posting and it tailors your resume and writes a cover letter for it, then
-            hands you both from your dashboard so you can go apply yourself. A separate cold email
-            pipeline runs alongside this one and does send on its own; see below for what that means.
-            Nothing here uses anyone else's data or account but your own: your own Google account, your
-            own resume, your own applications going out under your own name.
-          </p>
+        <div className="stat-strip guide-stats">
+          <StatItem icon={<SearchIcon />} label="Search sources" value={SOURCE_COUNT} />
+          <StatItem icon={<FilterIcon />} label="Built-in job types" value={LANE_PRESET_COUNT} />
+          <StatItem icon={<RunsIcon />} label="Setup steps" value={SETUP_STEPS.length} />
         </div>
+
+        <div className="resume-lane-grid guide-feature-grid">
+          {FEATURES.map((f) => (
+            <div key={f.title} className="resume-lane-card guide-feature-tile">
+              <div className="stat-item-icon">{f.icon}</div>
+              <h3 className="guide-feature-title">{f.title}</h3>
+              <p className="guide-feature-body">{f.body}</p>
+            </div>
+          ))}
+        </div>
+        <p className="hint guide-feature-note">
+          Nothing here uses anyone else's data or account but your own: your own Google account,
+          your own resume, your own applications going out under your own name.
+        </p>
 
         <ol ref={guideRef} className={`guide-steps${guideInView ? " in-view" : ""}`}>
           {SETUP_STEPS.map((step) => (
@@ -202,25 +240,39 @@ export default function Home() {
           ))}
         </ol>
 
-        <h3>Ongoing: swiping and the dashboard</h3>
-        <p>
-          Once you're set up, come back any time. Your dashboard links to your swipe queue: swipe
-          through new postings as they arrive, and each right swipe generates a resume, a cover
-          letter, and a Drive link, then drops it into your dashboard to apply with. The dashboard
-          also shows everything already applied to and a log of recent runs. "Mark as Applied" is
-          for once you've actually submitted something yourself; "Dismiss" sets a posting aside for
-          good.
-        </p>
-
-        <h3>Cold email, the one thing that sends on its own</h3>
-        <p>
-          Separately from the swipe queue, this also searches Adzuna and hiring.cafe for postings that
-          list a real, published contact email, never a guessed one like careers@company.com. When it
-          finds one, it writes a short email for it and sends that email from your Gmail without
-          waiting for you to review it first. It starts at a low daily cap, raises that cap after a
-          couple of weeks, and holds it back down if too many of those emails start bouncing. Every
-          email it sends, along with any reply or bounce, shows up on the cold email page.
-        </p>
+        <h3>Ongoing, once you're set up</h3>
+        <div className="grid2 guide-ongoing-grid">
+          <div className="card guide-ongoing-card">
+            <div className="chip-input guide-ongoing-badges">
+              <span className="badge signal">Needs review</span>
+              <span className="badge pine">Applied</span>
+              <span className="badge">Interview rate</span>
+              <span className="badge">Runs</span>
+            </div>
+            <p className="guide-ongoing-body">
+              Come back any time. New postings land in Needs review; swipe through them, or paste one
+              in yourself if you found it elsewhere. Applied tracks a real outcome per posting: no
+              response yet, responded, interview, offer, or rejected. That's what your dashboard's
+              interview rate is built from. Runs shows exactly what happened on any given day, including
+              the days nothing did.
+            </p>
+          </div>
+          <div className="card guide-ongoing-card">
+            <div className="chip-input guide-ongoing-badges">
+              <span className="badge">Scanned</span>
+              <span className="badge">Eligible</span>
+              <span className="badge signal">Contacts found</span>
+              <span className="badge pine">Sent</span>
+            </div>
+            <p className="guide-ongoing-body">
+              Separately from the swipe queue, a cold email pipeline searches for postings that list a
+              real, published contact email (never a guessed one like careers@company.com) and
+              verifies it can actually receive mail before sending. It starts at a low daily cap, raises
+              that cap after a couple of weeks, and holds it back down if too many emails start
+              bouncing. Every send, reply, and bounce shows up on its own page.
+            </p>
+          </div>
+        </div>
 
         <div className="card">
           <h3 style={{ marginTop: 0 }}>A few important limits, on purpose</h3>
