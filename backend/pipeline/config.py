@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from app.crypto import decrypt
 from app.models import Profile as ProfileRow
 from app.models import Secret as SecretRow
+from app.models import User as UserRow
 
 _session_var: ContextVar[Session | None] = ContextVar("_session_var", default=None)
 
@@ -118,6 +119,12 @@ class Profile:
     # restriction, same "no filter" default as every other optional setting here.
     target_regions: list[str] = field(default_factory=list)
     apply_daily_cap: int = 15
+    # "free" | "paid" -- read off the owning User row (see app/models.py's User.plan), not
+    # stored on ProfileRow itself. Used by run_pipeline.py to enforce PLAN_ALLOWED_SOURCES/
+    # PLAN_APPLY_DAILY_CAP_LIMITS at the one place every caller (daily cron, manual run-now)
+    # funnels through, so a stale wizard-saved source list or apply_daily_cap can't bypass
+    # a plan's real limit just because it was set before a downgrade.
+    plan: str = "free"
     github_repo: str = ""
     # Lane name -> parsed resume JSON dict (the old build_resume_json() output). The
     # original file-based Profile had a resume_path(lane_name) -> Path method that
@@ -139,8 +146,12 @@ def load_profile(user: str) -> Profile:
     applicant_fields = {f.name for f in fields(Applicant)}
     applicant = Applicant(**{k: v for k, v in (row.applicant_json or {}).items() if k in applicant_fields})
 
+    user_row = db.query(UserRow).filter(UserRow.id == user_id).one_or_none()
+    plan = user_row.plan if user_row is not None else "free"
+
     return Profile(
         user=user_id,
+        plan=plan,
         sheet_id=row.sheet_id,
         gmail_address=row.gmail_address,
         report_email=row.report_email,

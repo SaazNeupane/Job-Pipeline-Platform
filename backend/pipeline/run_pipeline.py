@@ -50,6 +50,21 @@ from pipeline.search import (
 )
 from pipeline.swipe_actions import queue_for_swipe
 
+# Free-tier source/queue limits -- gate here (the one place both the daily cron and manual
+# run-now funnel through via run()), not just in the wizard UI, so a stale saved source list
+# or apply_daily_cap can't bypass a plan's real limit just because it was set before a
+# downgrade. All-LLM-cost features (cold email, cover letters, fit reasoning) stay ungated
+# since those calls run against the user's own Gemini key, not ours -- only real gates are
+# ones that touch OUR compute (search fan-out, queue size), per explicit product decision.
+PLAN_ALLOWED_SOURCES = {
+    "free": {"adzuna", "hiring_cafe", "greenhouse", "lever", "ashby"},
+    "paid": {
+        "adzuna", "hiring_cafe", "greenhouse", "lever", "ashby",
+        "workday", "smartrecruiters", "workable", "recruitee", "breezy", "company_site",
+    },
+}
+PLAN_APPLY_DAILY_CAP_LIMITS = {"free": 15, "paid": 50}
+
 
 def run(
     user: str, lane_filter: str | None = None, max_age_days: int | None = None, cold_email_only: bool = False,
@@ -79,6 +94,19 @@ def run(
 
     profile = load_profile(user)
     secrets = load_secrets(user)
+
+    # Plan-gated limits (see PLAN_ALLOWED_SOURCES/PLAN_APPLY_DAILY_CAP_LIMITS above).
+    allowed_sources = PLAN_ALLOWED_SOURCES.get(profile.plan, PLAN_ALLOWED_SOURCES["free"])
+    for lane in profile.lanes:
+        blocked = [s for s in lane.sources if s not in allowed_sources]
+        if blocked:
+            errors.append(
+                f"{lane.name}: source(s) {blocked} require the paid plan, skipped for this run"
+            )
+            lane.sources = [s for s in lane.sources if s in allowed_sources]
+    cap_limit = PLAN_APPLY_DAILY_CAP_LIMITS.get(profile.plan, PLAN_APPLY_DAILY_CAP_LIMITS["free"])
+    if profile.apply_daily_cap > cap_limit:
+        profile.apply_daily_cap = cap_limit
 
     lanes = profile.lanes
     if lane_filter:

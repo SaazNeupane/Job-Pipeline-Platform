@@ -32,6 +32,20 @@ class User(Base):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # "free" | "paid" -- no payment processor wired up yet, this is just the gate a future
+    # Stripe (or similar) integration would flip. Manual-run quota (see manual_run_count
+    # below) is the first thing actually gated on it; more plan-differentiated behavior
+    # (e.g. run_hour_utc choice, source count) can key off this same field later without a
+    # schema change.
+    plan: Mapped[str] = mapped_column(String, default="free")
+    # Monthly manual "Run now" counter -- counts only user-clicked runs (app/main.py's
+    # run_now route), never the scheduler's own /api/internal/run/{user_id} call, so the
+    # automatic daily run never eats into this. manual_run_period is "YYYY-MM"; run_now()
+    # resets the count to 0 whenever the stored period no longer matches the current month
+    # rather than needing a cron job to reset it.
+    manual_run_count: Mapped[int] = mapped_column(Integer, default=0)
+    manual_run_period: Mapped[str] = mapped_column(String, default="")
+
     profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False)
     oauth_credentials: Mapped[list["OAuthCredential"]] = relationship(back_populates="user")
     secrets: Mapped[list["Secret"]] = relationship(back_populates="user")

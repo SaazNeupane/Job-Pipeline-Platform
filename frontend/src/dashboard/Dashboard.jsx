@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
+import { useAuth } from "../auth/AuthContext.jsx";
 import ConfirmDialog from "../components/ConfirmDialog.jsx";
 import Loading from "../components/Loading.jsx";
 import LaneSection from "../components/LaneSection.jsx";
@@ -258,6 +259,7 @@ function GoogleReconnectBanner({ onReconnected }) {
 }
 
 export default function Dashboard() {
+  const { user, refreshUser } = useAuth();
   const { data, error, errorCode, setError, reload: load } = useApiData(() => api.dashboard(), []);
   const [selected, setSelected] = useState(new Set());
   const [openDetail, setOpenDetail] = useState(null);
@@ -272,6 +274,7 @@ export default function Dashboard() {
   const [runMaxAgeDays, setRunMaxAgeDays] = useState("");
   const [runColdEmailOnly, setRunColdEmailOnly] = useState(false);
   const [tab, setTab] = useState("review"); // overview | review | applied | runs
+  const quotaExhausted = !!user && user.manual_runs_used >= user.manual_runs_limit;
 
   async function runNow() {
     setRunState("pending");
@@ -282,6 +285,7 @@ export default function Dashboard() {
         cold_email_only: runColdEmailOnly,
       });
       setRunState("started");
+      refreshUser(); // picks up the just-incremented manual_runs_used for the counter below
     } catch {
       // api.js's handle() already fired a toast with the real reason (e.g. "Already
       // ran today. Try again tomorrow.") -- just reset the button, nothing else to show.
@@ -459,9 +463,21 @@ export default function Dashboard() {
                 </p>
               )}
               {runState === "started" && <p className="hint" style={{ margin: 0 }}>Run started. Check back in a few minutes.</p>}
+              {user && (
+                <p className="hint" style={{ margin: 0 }}>
+                  {user.manual_runs_used}/{user.manual_runs_limit} manual runs used this month ({user.plan} plan)
+                  {user.plan === "free" && quotaExhausted && " -- upgrade for more."}
+                </p>
+              )}
             </div>
-            <button type="button" className="primary" onClick={runNow} disabled={runState === "pending" || runState === "started"}>
-              {runState === "pending" ? "Starting…" : runState === "started" ? "Run started" : "Run now"}
+            <button
+              type="button"
+              className="primary"
+              onClick={runNow}
+              disabled={runState === "pending" || runState === "started" || quotaExhausted}
+              title={quotaExhausted ? "Manual run limit reached for this month" : undefined}
+            >
+              {runState === "pending" ? "Starting…" : runState === "started" ? "Run started" : quotaExhausted ? "Limit reached" : "Run now"}
             </button>
 
             <details className="advanced" style={{ flexBasis: "100%" }}>

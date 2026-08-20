@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { api } from "../../api.js";
 import Loading from "../../components/Loading.jsx";
@@ -49,6 +49,66 @@ const LANE_ICONS = {
   new_grad_coop: "🎓",
 };
 
+// Only the countries pipeline/filter.py's COUNTRY_LOCATION_ALIASES actually curates
+// province/state-level matching for -- picking anything outside this list falls back to
+// "Other" (a plain free-text country name/code), same fail-open-to-freetext behavior the
+// old all-free-text inputs always had. Region `value`s are exactly what
+// COUNTRY_LOCATION_ALIASES matches against (lowercase abbreviation or full name) -- GB has
+// no abbreviation tier for its four nations, so those use their full name as the value.
+const CURATED_COUNTRIES = [
+  {
+    code: "ca", label: "Canada",
+    regions: [
+      { value: "on", label: "Ontario" }, { value: "bc", label: "British Columbia" },
+      { value: "ab", label: "Alberta" }, { value: "qc", label: "Quebec" },
+      { value: "mb", label: "Manitoba" }, { value: "sk", label: "Saskatchewan" },
+      { value: "ns", label: "Nova Scotia" }, { value: "nb", label: "New Brunswick" },
+      { value: "nl", label: "Newfoundland and Labrador" }, { value: "pe", label: "Prince Edward Island" },
+      { value: "yt", label: "Yukon" }, { value: "nt", label: "Northwest Territories" },
+      { value: "nu", label: "Nunavut" },
+    ],
+  },
+  {
+    code: "us", label: "United States",
+    regions: [
+      { value: "al", label: "Alabama" }, { value: "ak", label: "Alaska" }, { value: "az", label: "Arizona" },
+      { value: "ar", label: "Arkansas" }, { value: "ca", label: "California" }, { value: "co", label: "Colorado" },
+      { value: "ct", label: "Connecticut" }, { value: "de", label: "Delaware" }, { value: "dc", label: "District of Columbia" },
+      { value: "fl", label: "Florida" }, { value: "ga", label: "Georgia" }, { value: "hi", label: "Hawaii" },
+      { value: "id", label: "Idaho" }, { value: "il", label: "Illinois" }, { value: "in", label: "Indiana" },
+      { value: "ia", label: "Iowa" }, { value: "ks", label: "Kansas" }, { value: "ky", label: "Kentucky" },
+      { value: "la", label: "Louisiana" }, { value: "me", label: "Maine" }, { value: "md", label: "Maryland" },
+      { value: "ma", label: "Massachusetts" }, { value: "mi", label: "Michigan" }, { value: "mn", label: "Minnesota" },
+      { value: "ms", label: "Mississippi" }, { value: "mo", label: "Missouri" }, { value: "mt", label: "Montana" },
+      { value: "ne", label: "Nebraska" }, { value: "nv", label: "Nevada" }, { value: "nh", label: "New Hampshire" },
+      { value: "nj", label: "New Jersey" }, { value: "nm", label: "New Mexico" }, { value: "ny", label: "New York" },
+      { value: "nc", label: "North Carolina" }, { value: "nd", label: "North Dakota" }, { value: "oh", label: "Ohio" },
+      { value: "ok", label: "Oklahoma" }, { value: "or", label: "Oregon" }, { value: "pa", label: "Pennsylvania" },
+      { value: "ri", label: "Rhode Island" }, { value: "sc", label: "South Carolina" }, { value: "sd", label: "South Dakota" },
+      { value: "tn", label: "Tennessee" }, { value: "tx", label: "Texas" }, { value: "ut", label: "Utah" },
+      { value: "vt", label: "Vermont" }, { value: "va", label: "Virginia" }, { value: "wa", label: "Washington" },
+      { value: "wv", label: "West Virginia" }, { value: "wi", label: "Wisconsin" }, { value: "wy", label: "Wyoming" },
+    ],
+  },
+  {
+    code: "gb", label: "United Kingdom",
+    regions: [
+      { value: "england", label: "England" }, { value: "scotland", label: "Scotland" },
+      { value: "wales", label: "Wales" }, { value: "northern ireland", label: "Northern Ireland" },
+    ],
+  },
+  {
+    code: "au", label: "Australia",
+    regions: [
+      { value: "nsw", label: "New South Wales" }, { value: "vic", label: "Victoria" },
+      { value: "qld", label: "Queensland" }, { value: "wa", label: "Western Australia" },
+      { value: "sa", label: "South Australia" }, { value: "tas", label: "Tasmania" },
+      { value: "act", label: "Australian Capital Territory" }, { value: "nt", label: "Northern Territory" },
+    ],
+  },
+];
+const CURATED_COUNTRY_CODES = new Set(CURATED_COUNTRIES.map((c) => c.code));
+
 const SENIORITY_LABELS = {
   intern: "Internship only",
   entry: "Entry-level only",
@@ -77,9 +137,42 @@ export default function Lanes() {
   const [breezyCompanies, setBreezyCompanies] = useState((draft.breezy_companies || []).join(", "));
   const [companySiteTrackers, setCompanySiteTrackers] = useState((draft.company_site_trackers || []).join(", "));
   const [adzunaCountry, setAdzunaCountry] = useState(draft.adzuna_country || "ca");
-  const [targetCountries, setTargetCountries] = useState((draft.target_countries || []).join(", "));
-  const [targetRegions, setTargetRegions] = useState((draft.target_regions || []).join(", "));
+  // Curated countries (see CURATED_COUNTRIES) get real checkboxes with a linked
+  // province/state list; anything else falls back into otherCountries as free text, same
+  // as the old all-free-text input's behavior for uncurated countries. Seeded from the
+  // draft's saved target_countries/target_regions by splitting on which codes are curated.
+  const draftCountries = draft.target_countries || [];
+  const draftRegions = new Set(draft.target_regions || []);
+  const [selectedCountries, setSelectedCountries] = useState(
+    new Set(draftCountries.filter((c) => CURATED_COUNTRY_CODES.has(c)))
+  );
+  const [otherCountries, setOtherCountries] = useState(
+    draftCountries.filter((c) => !CURATED_COUNTRY_CODES.has(c)).join(", ")
+  );
+  const [selectedRegions, setSelectedRegions] = useState(() => {
+    const initial = {};
+    for (const country of CURATED_COUNTRIES) {
+      initial[country.code] = new Set(country.regions.filter((r) => draftRegions.has(r.value)).map((r) => r.value));
+    }
+    return initial;
+  });
   const [runHourUtc, setRunHourUtc] = useState(draft.run_hour_utc ?? 14);
+
+  function toggleCountry(code) {
+    setSelectedCountries((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code); else next.add(code);
+      return next;
+    });
+  }
+
+  function toggleRegion(countryCode, value) {
+    setSelectedRegions((prev) => {
+      const current = new Set(prev[countryCode] || []);
+      if (current.has(value)) current.delete(value); else current.add(value);
+      return { ...prev, [countryCode]: current };
+    });
+  }
 
   const { data: meta, error, setError } = useApiData(() => api.lanePresets(), []);
 
@@ -170,8 +263,8 @@ export default function Lanes() {
         breezy_companies: csv(breezyCompanies),
         company_site_trackers: csv(companySiteTrackers),
         adzuna_country: adzunaCountry.trim().toLowerCase(),
-        target_countries: csv(targetCountries).map((c) => c.toLowerCase()),
-        target_regions: csv(targetRegions).map((r) => r.toLowerCase()),
+        target_countries: [...selectedCountries, ...csv(otherCountries).map((c) => c.toLowerCase())],
+        target_regions: [...selectedCountries].flatMap((code) => [...(selectedRegions[code] || [])]),
         run_hour_utc: runHourUtc,
       });
       await refreshDraft();
@@ -197,6 +290,57 @@ export default function Lanes() {
       {error && <p className="error-banner">{error}</p>}
 
       <form onSubmit={submit}>
+        <fieldset>
+          <legend>Where you'll accept jobs</legend>
+          <p className="hint">Pick every country you're open to. Leave provinces/states unchecked within a country to accept postings anywhere in it.</p>
+          <div className="chip-input">
+            {CURATED_COUNTRIES.map((country) => {
+              const on = selectedCountries.has(country.code);
+              return (
+                <button
+                  type="button" key={country.code}
+                  className={`keyword-chip${on ? " on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => toggleCountry(country.code)}
+                >
+                  {on ? "✓ " : ""}{country.label}
+                </button>
+              );
+            })}
+          </div>
+          {[...selectedCountries].map((code) => {
+            const country = CURATED_COUNTRIES.find((c) => c.code === code);
+            const picked = selectedRegions[code] || new Set();
+            return (
+              <details className="advanced" key={code}>
+                <summary>
+                  Narrow {country.label} down to specific provinces/states (optional)
+                  {picked.size > 0 ? ` -- ${picked.size} selected` : ""}
+                </summary>
+                <div className="chip-input">
+                  {country.regions.map((region) => {
+                    const on = picked.has(region.value);
+                    return (
+                      <button
+                        type="button" key={region.value}
+                        className={`keyword-chip${on ? " on" : ""}`}
+                        aria-pressed={on}
+                        onClick={() => toggleRegion(code, region.value)}
+                      >
+                        {on ? "✓ " : ""}{region.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </details>
+            );
+          })}
+          <label>
+            Other countries not listed above (optional, comma-separated country names)
+            <input value={otherCountries} onChange={(e) => setOtherCountries(e.target.value)} placeholder="e.g. germany, ireland" />
+          </label>
+        </fieldset>
+
         <input
           className="lane-search"
           value={presetFilter}
@@ -207,81 +351,84 @@ export default function Lanes() {
           <p className="hint">No built-in job type matches "{presetFilter}". Build your own further down instead.</p>
         )}
         <div className="lane-grid">
-          {filteredPresets.map(([name, lane]) => (
-            <label key={name} className="lane-card">
-              <input type="checkbox" className="sr-only" checked={selectedPresets.has(name)} onChange={() => togglePreset(name)} />
-              <span className="lane-card-check" aria-hidden="true">✓</span>
-              <span className="lane-card-icon">{LANE_ICONS[name] || "💼"}</span>
-              <div>
-                <div className="lane-card-title">{lane.label}</div>
-                <div className="lane-card-hint">{(meta.preset_blurbs || {})[name] || lane.keywords.join(", ")}</div>
-              </div>
-            </label>
-          ))}
+          {filteredPresets.map(([name, lane]) => {
+            const selected = selectedPresets.has(name);
+            const excluded = presetExcluded[name] || new Set();
+            const total = meta.presets[name].keywords.length;
+            const kept = total - excluded.size;
+            return (
+              <Fragment key={name}>
+                <label className="lane-card">
+                  <input type="checkbox" className="sr-only" checked={selected} onChange={() => togglePreset(name)} />
+                  <span className="lane-card-check" aria-hidden="true">✓</span>
+                  <span className="lane-card-icon">{LANE_ICONS[name] || "💼"}</span>
+                  <div>
+                    <div className="lane-card-title">{lane.label}</div>
+                    <div className="lane-card-hint">{(meta.preset_blurbs || {})[name] || lane.keywords.join(", ")}</div>
+                  </div>
+                </label>
+                {selected && (
+                  <details className="advanced lane-card-details">
+                    <summary>Customize keywords for {meta.presets[name].label}</summary>
+                    <p className="hint">
+                      This preset searches every keyword lit up below. Want just part of it, like
+                      "baker" instead of every food-service role? Tap the rest off.
+                    </p>
+                    <div className="preset-keyword-head">
+                      <span className="hint">{kept} of {total} selected</span>
+                      <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, true)}>Select all</button>
+                      <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, false)}>Select none</button>
+                    </div>
+                    <div className="chip-input">
+                      {meta.presets[name].keywords.map((kw) => {
+                        const on = !excluded.has(kw);
+                        return (
+                          <button
+                            type="button" key={kw}
+                            className={`keyword-chip${on ? " on" : ""}`}
+                            aria-pressed={on}
+                            onClick={() => togglePresetKeyword(name, kw)}
+                          >
+                            {on ? "✓ " : ""}{kw}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <label>
+                      Add your own, comma-separated (optional)
+                      <input
+                        value={presetExtra[name] || ""}
+                        onChange={(e) => setPresetExtra({ ...presetExtra, [name]: e.target.value })}
+                        placeholder="e.g. pastry chef, line cook"
+                      />
+                    </label>
+                    <label>
+                      Experience level
+                      <select
+                        value={presetSeniority[name] ?? (meta.presets[name].seniority_max || "")}
+                        onChange={(e) => setPresetSeniority({ ...presetSeniority, [name]: e.target.value })}
+                      >
+                        <option value="">No limit</option>
+                        {(meta.seniority_levels || []).map((level) => (
+                          <option key={level} value={level}>{SENIORITY_LABELS[level] || level}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Max years of experience required (optional)
+                      <input
+                        type="number" min="0"
+                        value={presetMaxYears[name] ?? (meta.presets[name].max_years_experience ?? "")}
+                        onChange={(e) => setPresetMaxYears({ ...presetMaxYears, [name]: e.target.value })}
+                        placeholder="e.g. 1 -- skips postings asking for more"
+                      />
+                    </label>
+                  </details>
+                )}
+              </Fragment>
+            );
+          })}
         </div>
-        {[...selectedPresets].map((name) => {
-          const excluded = presetExcluded[name] || new Set();
-          const total = meta.presets[name].keywords.length;
-          const kept = total - excluded.size;
-          return (
-            <details className="advanced" key={name}>
-              <summary>Customize keywords for {meta.presets[name].label}</summary>
-              <p className="hint">
-                This preset searches every keyword lit up below. Want just part of it, like
-                "baker" instead of every food-service role? Tap the rest off.
-              </p>
-              <div className="preset-keyword-head">
-                <span className="hint">{kept} of {total} selected</span>
-                <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, true)}>Select all</button>
-                <button type="button" className="ghost" onClick={() => setAllPresetKeywords(name, false)}>Select none</button>
-              </div>
-              <div className="chip-input">
-                {meta.presets[name].keywords.map((kw) => {
-                  const on = !excluded.has(kw);
-                  return (
-                    <button
-                      type="button" key={kw}
-                      className={`keyword-chip${on ? " on" : ""}`}
-                      aria-pressed={on}
-                      onClick={() => togglePresetKeyword(name, kw)}
-                    >
-                      {on ? "✓ " : ""}{kw}
-                    </button>
-                  );
-                })}
-              </div>
-              <label>
-                Add your own, comma-separated (optional)
-                <input
-                  value={presetExtra[name] || ""}
-                  onChange={(e) => setPresetExtra({ ...presetExtra, [name]: e.target.value })}
-                  placeholder="e.g. pastry chef, line cook"
-                />
-              </label>
-              <label>
-                Experience level
-                <select
-                  value={presetSeniority[name] ?? (meta.presets[name].seniority_max || "")}
-                  onChange={(e) => setPresetSeniority({ ...presetSeniority, [name]: e.target.value })}
-                >
-                  <option value="">No limit</option>
-                  {(meta.seniority_levels || []).map((level) => (
-                    <option key={level} value={level}>{SENIORITY_LABELS[level] || level}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Max years of experience required (optional)
-                <input
-                  type="number" min="0"
-                  value={presetMaxYears[name] ?? (meta.presets[name].max_years_experience ?? "")}
-                  onChange={(e) => setPresetMaxYears({ ...presetMaxYears, [name]: e.target.value })}
-                  placeholder="e.g. 1 -- skips postings asking for more"
-                />
-              </label>
-            </details>
-          );
-        })}
 
         <fieldset>
           <legend>Your own job type (optional)</legend>
@@ -340,14 +487,6 @@ export default function Lanes() {
           <label>
             Adzuna country code (2 letters, e.g. "ca" for Canada, "us" for United States)
             <input value={adzunaCountry} onChange={(e) => setAdzunaCountry(e.target.value)} maxLength={2} />
-          </label>
-          <label>
-            Countries you'll accept postings from (comma-separated; codes like "ca"/"us"/"gb"/"au" are matched precisely, anything else is matched as a plain country name)
-            <input value={targetCountries} onChange={(e) => setTargetCountries(e.target.value)} placeholder="e.g. ca, us" />
-          </label>
-          <label>
-            Provinces/states to narrow down to (optional, comma-separated; e.g. "on, bc" or "texas"). Leave blank to accept postings anywhere in the countries above
-            <input value={targetRegions} onChange={(e) => setTargetRegions(e.target.value)} placeholder="e.g. on, bc, ab" />
           </label>
           <label>
             What hour your daily run happens (UTC)

@@ -51,16 +51,27 @@ function ImportFromPdf({ laneNames, laneLabels, importedLanes, onImported }) {
       </ol>
       {error && <p className="error-banner">{error}</p>}
       {laneNames.length > 1 && (
-        <label>
-          Tag this resume's entries as relevant to
-          <select value={taggedLane} onChange={(e) => setTaggedLane(e.target.value)} disabled={importing}>
-            {laneNames.map((name) => (
-              <option key={name} value={name}>
-                {(laneLabels[name] || name)}{importedLanes.includes(name) ? " (already imported)" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
+        <>
+          <ul className="lane-import-status">
+            {laneNames.map((name) => {
+              const done = importedLanes.includes(name);
+              return (
+                <li key={name} className={done ? "lane-import-done" : "lane-import-pending"}>
+                  <span aria-hidden="true">{done ? "✓" : "○"}</span> {laneLabels[name] || name}
+                  {done ? " -- imported" : " -- not imported yet"}
+                </li>
+              );
+            })}
+          </ul>
+          <label>
+            Tag this resume's entries as relevant to
+            <select value={taggedLane} onChange={(e) => setTaggedLane(e.target.value)} disabled={importing}>
+              {laneNames.map((name) => (
+                <option key={name} value={name}>{laneLabels[name] || name}</option>
+              ))}
+            </select>
+          </label>
+        </>
       )}
       <div className="grid2">
         <label>Gemini API key<input ref={keyRef} disabled={importing} /></label>

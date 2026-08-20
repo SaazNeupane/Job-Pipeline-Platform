@@ -127,7 +127,6 @@ export default function App() {
           {menuOpen ? <CloseIcon /> : <MenuIcon />}
         </button>
         <div className={`topbar-right${menuOpen ? " topbar-right-open" : ""}`}>
-          <Link to="/#guide" className="topbar-link" onClick={() => setMenuOpen(false)}>Guide</Link>
           <AccountLink onNavigate={() => setMenuOpen(false)} />
         </div>
       </header>

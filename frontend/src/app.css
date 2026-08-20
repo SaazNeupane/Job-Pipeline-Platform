@@ -736,7 +736,12 @@ legend {
    preset to one full-width column no matter how wide the browser window
    was. Confirmed via computed grid-template-columns, not guessed. */
 .lane-search { margin-bottom: 0.9rem; max-width: 360px; }
-.lane-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.9rem; margin-bottom: 0.5rem; }
+/* Single column, not a multi-across grid -- each card's "Customize keywords" details
+   panel (.lane-card-details, below) expands to full width right under its own card, which
+   made a multi-column layout look ragged (one card taller than its row neighbors whenever
+   it was expanded). One lane per row keeps that expansion visually clean instead. */
+.lane-grid { display: grid; grid-template-columns: 1fr; gap: 0.9rem; margin-bottom: 0.5rem; }
+.lane-card-details { grid-column: 1 / -1; }
 .lane-card {
   position: relative;
   display: flex;
@@ -1014,6 +1019,14 @@ tr:last-child td { border-bottom: none; }
 
 .steps-list { padding-left: 1.2rem; }
 .steps-list li { margin-bottom: 0.6rem; }
+
+/* Per-lane import status on the multi-lane resume-import step -- was previously only
+   visible as "(already imported)" text inside a closed <select> option, easy to miss.
+   A plain visible list surfaces which lanes still need a PDF at a glance. */
+.lane-import-status { list-style: none; padding: 0; margin: 0 0 0.9rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.lane-import-status li { font-size: 0.9rem; }
+.lane-import-done { color: var(--redline); font-weight: 600; }
+.lane-import-pending { color: var(--ink-soft); }
 
 /* Swipe queue -------------------------------------------------------------
    Signature moment for this page: cards read as a real physical deck (a

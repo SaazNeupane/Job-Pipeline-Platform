@@ -271,9 +271,30 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(access_token=create_access_token(user.id))
 
 
+PLAN_MANUAL_RUN_LIMITS = {"free": 3, "paid": 50}
+
+
+def _current_manual_run_usage(user: User) -> tuple[int, int]:
+    """(used, limit) for this user's current calendar month, without mutating anything --
+    a stale stored period just means 0 used, doesn't need a write to report correctly."""
+    period = utcnow().date().strftime("%Y-%m")
+    used = user.manual_run_count if user.manual_run_period == period else 0
+    limit = PLAN_MANUAL_RUN_LIMITS.get(user.plan, PLAN_MANUAL_RUN_LIMITS["free"])
+    return used, limit
+
+
 @app.get("/api/me")
 def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "email_verified": user.email_verified, "is_admin": user.is_admin}
+    used, limit = _current_manual_run_usage(user)
+    return {
+        "id": user.id,
+        "email": user.email,
+        "email_verified": user.email_verified,
+        "is_admin": user.is_admin,
+        "plan": user.plan,
+        "manual_runs_used": used,
+        "manual_runs_limit": limit,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -487,14 +508,30 @@ def run_now(
     user: User = Depends(get_current_user),
 ):
     """User-facing manual trigger for their own daily run, same underlying job as the
-    scheduler's /api/internal/run/{user_id} -- one run per calendar day, checked against
-    DailySummary rather than any separate cooldown state, since a summary row is exactly
-    what a completed run produces. Optional overrides (lane_filter/max_age_days/
-    cold_email_only) mirror run_pipeline.run()'s own optional parameters -- e.g. a manual
-    re-run of one lane after tweaking its keywords, or widening the recency window past
-    the scheduled run's default cutoff."""
+    scheduler's /api/internal/run/{user_id}. Gated by two independent limits: a monthly
+    manual-run quota by plan (PLAN_MANUAL_RUN_LIMITS, User.manual_run_count/_period) and,
+    for a full default run only, a same-day guard checked against DailySummary, since a
+    summary row is exactly what a completed run produces. Optional overrides (lane_filter/
+    max_age_days/cold_email_only) mirror run_pipeline.run()'s own optional parameters --
+    e.g. a manual re-run of one lane after tweaking its keywords, or widening the recency
+    window past the scheduled run's default cutoff."""
     body = body or RunNowRequest()
     from pipeline.postings_store import get_daily_summaries
+
+    # Manual-run quota: counts every user-clicked /api/run-now that actually gets queued
+    # (full or scoped alike), never the scheduler's /api/internal/run/{user_id}. Checked
+    # up front so a user who's already exhausted their quota gets the real reason instead
+    # of a same-day 409 that implies they could just come back tomorrow -- but only
+    # committed (see below, after the same-day guard) once the run is actually queued, so
+    # a request that ends up 409ing on the same-day guard doesn't silently burn a slot.
+    period = utcnow().date().strftime("%Y-%m")
+    used = user.manual_run_count if user.manual_run_period == period else 0
+    limit = PLAN_MANUAL_RUN_LIMITS.get(user.plan, PLAN_MANUAL_RUN_LIMITS["free"])
+    if used >= limit:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"Manual run limit reached ({limit}/month on the {user.plan} plan).",
+        )
 
     # The same-day guard only applies to a full default run -- a scoped re-run (one
     # lane, or cold-email-only) is a deliberate narrow action, not a duplicate of the
@@ -513,6 +550,10 @@ def run_now(
         pipeline_config.set_session(prev_session)
         if already_ran:
             raise HTTPException(status.HTTP_409_CONFLICT, "Already ran today. Try again tomorrow.")
+
+    user.manual_run_period = period
+    user.manual_run_count = used + 1
+    db.commit()
 
     background_tasks.add_task(
         _run_pipeline_in_background, user.id, body.lane_filter, body.max_age_days, body.cold_email_only
