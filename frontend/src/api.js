@@ -85,6 +85,10 @@ function patch(path, body) {
   }).then(handle);
 }
 
+function del(path) {
+  return fetch(`${API_BASE}${path}`, { method: "DELETE", headers: authHeaders() }).then(handle);
+}
+
 async function getBlob(path) {
   const resp = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
   if (!resp.ok) return handle(resp);
@@ -137,4 +141,12 @@ export const api = {
   setOutcome: (postingKey, outcome) => post(`/api/dashboard/outcome/${encodeURIComponent(postingKey)}`, { outcome }),
   dismissBulk: (postingKeys) => post("/api/dashboard/dismiss-bulk", { posting_keys: postingKeys }),
   runNow: (overrides) => post("/api/run-now", overrides || {}),
+
+  // -- admin (is_admin accounts only) --
+  adminInvites: () => get("/api/admin/invites"),
+  adminMintInvite: () => post("/api/admin/invites"),
+  adminRevokeInvite: (inviteId) => del(`/api/admin/invites/${encodeURIComponent(inviteId)}`),
+  adminUsers: () => get("/api/admin/users"),
+  adminUserDetail: (userId) => get(`/api/admin/users/${encodeURIComponent(userId)}`),
+  adminSetUserActive: (userId, active) => post(`/api/admin/users/${encodeURIComponent(userId)}/active`, { active }),
 };

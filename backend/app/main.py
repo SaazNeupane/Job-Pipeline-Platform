@@ -35,6 +35,7 @@ from app.db import SessionLocal, get_db
 from app.models import Invite, Profile, User
 from app.rate_limit import rate_limit
 from app.time_utils import utcnow
+from app.routers import admin as admin_router
 from app.routers import dashboard as dashboard_router
 from app.routers import swipe as swipe_router
 from app.routers import wizard as wizard_router
@@ -59,6 +60,7 @@ app = FastAPI(title="Job Pipeline Platform API")
 app.include_router(wizard_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(swipe_router.router)
+app.include_router(admin_router.router)
 
 
 @app.exception_handler(RefreshError)
@@ -271,7 +273,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 @app.get("/api/me")
 def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "email_verified": user.email_verified}
+    return {"id": user.id, "email": user.email, "email_verified": user.email_verified, "is_admin": user.is_admin}
 
 
 # ---------------------------------------------------------------------------
