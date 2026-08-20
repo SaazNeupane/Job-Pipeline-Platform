@@ -30,6 +30,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
     profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False)
     oauth_credentials: Mapped[list["OAuthCredential"]] = relationship(back_populates="user")
@@ -65,6 +66,7 @@ class Profile(Base):
     lever_companies_json: Mapped[list] = mapped_column(JSON, default=list)
     ashby_boards_json: Mapped[list] = mapped_column(JSON, default=list)
     target_countries_json: Mapped[list] = mapped_column(JSON, default=lambda: ["ca"])
+    target_regions_json: Mapped[list] = mapped_column(JSON, default=list)
     # lane name -> parsed resume JSON dict (build_resume_json()'s output), replaces the old
     # per-user resume_<lane>.json files -- see pipeline/config.py's Profile.resumes docstring.
     resumes_json: Mapped[dict] = mapped_column(JSON, default=dict)

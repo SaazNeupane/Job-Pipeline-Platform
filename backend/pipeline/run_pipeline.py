@@ -196,6 +196,7 @@ def run(
         matches = _try(
             f"filter_postings[{lane.name}]", filter_postings, unique_postings, lane, existing_keys,
             profile.applicant, profile.target_countries, existing_fingerprints, max_age_days,
+            target_regions=profile.target_regions,
         )
         total_matched += len(matches or [])
         if not matches:

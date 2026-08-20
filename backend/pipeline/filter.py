@@ -159,6 +159,48 @@ def _matches_target_countries(location: str, target_countries: list[str]) -> boo
     return False
 
 
+def _matches_target_regions(location: str, target_regions: list[str] | None) -> bool:
+    """Province/state-level sibling of _matches_target_countries -- an optional, finer
+    filter within whatever countries are already targeted (e.g. "Ontario and BC only",
+    not all of Canada). Empty/unset target_regions means no region restriction at all
+    (returns True), matching the "no filter" default every other optional lane/profile
+    setting uses.
+
+    Region names aren't scoped to a specific country's alias table here (unlike
+    _matches_target_countries, which only checks a country's own abbreviations/full
+    names) -- a user's target_regions list is usually short and self-evidently regional
+    ("on", "bc", "texas"), so this checks the entered value against every curated
+    country's abbreviation/full-name tables plus a plain substring fallback, same
+    positive-match-only, fail-closed reasoning as the country check: an unrecognized or
+    blank location is NOT a match, never "probably fine".
+
+    Unlike _matches_target_countries, this applies to every source including Adzuna --
+    Adzuna's own request-level scoping is by country only, never by province/state, so
+    there's no equivalent "already correct by construction" exemption here."""
+    if not target_regions:
+        return True
+    if not location:
+        return False
+
+    comma_segments = [e.strip().lower() for e in re.split(r"[;,]", location)]
+    loose_segments = [e.strip().lower() for e in re.split(r"[;,/()-]|\bor\b", location, flags=re.IGNORECASE)]
+    all_abbreviations = {a for aliases in COUNTRY_LOCATION_ALIASES.values() for a in aliases["abbreviations"]}
+    all_full_names = {n for aliases in COUNTRY_LOCATION_ALIASES.values() for n in aliases["full_names"]}
+
+    for region in target_regions:
+        code = region.strip().lower()
+        if not code:
+            continue
+        if code in all_abbreviations and any(seg == code for seg in comma_segments):
+            return True
+        if code in all_full_names and any(seg == code for seg in loose_segments):
+            return True
+        if code not in all_abbreviations and code not in all_full_names:
+            if code in comma_segments or code in loose_segments:
+                return True
+    return False
+
+
 def _is_recent(posted_at: str, now: datetime | None = None, max_age_days: int = RECENCY_MAX_AGE_DAYS) -> bool:
     """Missing or unparseable posted_at is treated as recent (fail open) —
     unlike the Canada-location check, staleness is a quality heuristic, not
@@ -325,6 +367,7 @@ def filter_postings(
     target_countries: list[str] | None = None,
     existing_fingerprints: set[str] | None = None,
     max_age_days: int = RECENCY_MAX_AGE_DAYS,
+    target_regions: list[str] | None = None,
 ) -> list[tuple[Posting, list[str], float]]:
     """Returns (posting, matched_terms, match_score) tuples for postings that are new
     (not in existing_keys, and not matching existing_fingerprints if given
@@ -356,7 +399,11 @@ def filter_postings(
     `target_countries` defaults to `["ca"]` if omitted, matching
     `Profile.target_countries`'s own default for backward compatibility.
     `max_age_days` defaults to RECENCY_MAX_AGE_DAYS — overridable per call
-    (see run_pipeline.py's manual-run lane/days override)."""
+    (see run_pipeline.py's manual-run lane/days override). `target_regions`
+    is an optional finer filter within target_countries (see
+    _matches_target_regions) -- unlike target_countries, it applies to
+    every source, Adzuna included, since Adzuna's own request-level scoping
+    is by country only."""
     target_countries = target_countries or ["ca"]
     results = []
     for posting in postings:
@@ -367,6 +414,8 @@ def filter_postings(
             if fp in existing_fingerprints:
                 continue
         if posting.source != "adzuna" and not _matches_target_countries(posting.location, target_countries):
+            continue
+        if not _matches_target_regions(posting.location, target_regions):
             continue
         if not _is_recent(posting.posted_at, max_age_days=max_age_days):
             continue

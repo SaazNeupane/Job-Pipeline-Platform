@@ -137,6 +137,15 @@ LANE_TEMPLATES = {
         "required_keywords": None, "seniority_max": None, "sources": ["adzuna", "hiring_cafe", "greenhouse"],
         "industries": [], "radius_km": 25.0, "remote_types": [], "employment_types": [], "salary_min": None, "salary_max": None,
     },
+    "new_grad_coop": {
+        "name": "new_grad_coop", "label": "New Grad / Co-op / Internship", "resume": "resume_new_grad_coop.json",
+        "keywords": ["intern", "internship", "co-op", "coop", "new grad", "new graduate", "graduate program", "entry level"],
+        "required_keywords": None, "seniority_max": "intern", "max_years_experience": 1,
+        "sources": ["adzuna", "hiring_cafe", "greenhouse", "lever", "ashby"],
+        "synonym_groups": [["co-op", "coop"], ["new grad", "new graduate"]],
+        "relabel_titles_to_posting": True,
+        "industries": [], "radius_km": None, "remote_types": [], "employment_types": [], "salary_min": None, "salary_max": None,
+    },
 }
 
 LANE_TEMPLATE_BLURBS = {
@@ -156,6 +165,7 @@ LANE_TEMPLATE_BLURBS = {
     "accounting_finance": "Bookkeeping, accounts payable/receivable, and financial analyst roles.",
     "marketing_creative": "Marketing, social media, design, and content roles.",
     "cleaning_janitorial": "Janitorial, custodial, and housekeeping roles.",
+    "new_grad_coop": "Internships, co-ops, and new-grad roles across any field, capped at 1 year of required experience.",
 }
 
 DEFAULT_GREENHOUSE_BOARDS = ["gitlab", "doordashusa", "robinhood", "figma", "faire", "stripe", "discord", "airbnb"]
@@ -180,8 +190,8 @@ def _finalize_lane_dict(base: dict) -> dict:
         "sources": base["sources"],
     }
     for optional_key in (
-        "seniority_max", "industries", "synonym_groups", "required_keywords", "radius_km",
-        "remote_types", "employment_types", "salary_min", "salary_max", "min_match_score",
+        "seniority_max", "max_years_experience", "industries", "synonym_groups", "required_keywords",
+        "radius_km", "remote_types", "employment_types", "salary_min", "salary_max", "min_match_score",
     ):
         if base.get(optional_key):
             lane_dict[optional_key] = base[optional_key]
@@ -209,6 +219,7 @@ def build_custom_lane(
     salary_max: float | None = None,
     required_keywords: list[str] | None = None,
     seniority_max: str | None = None,
+    max_years_experience: int | None = None,
     industries: list[str] | None = None,
     min_match_score: float | None = None,
 ) -> dict:
@@ -229,6 +240,7 @@ def build_custom_lane(
         "salary_max": salary_max,
         "required_keywords": required_keywords,
         "seniority_max": seniority_max,
+        "max_years_experience": max_years_experience,
         "industries": industries or [],
         "min_match_score": min_match_score,
     }
@@ -248,6 +260,7 @@ def build_profile_yaml_dict(
     lever_companies: list[str] | None = None,
     ashby_boards: list[str] | None = None,
     target_countries: list[str] | None = None,
+    target_regions: list[str] | None = None,
     apply_daily_cap: int = 15,
     cold_email_week1: int = 5,
     cold_email_week3plus: int = 12,
@@ -267,6 +280,7 @@ def build_profile_yaml_dict(
         "ashby_boards": ashby_boards or list(DEFAULT_ASHBY_BOARDS),
         "adzuna_country": adzuna_country or "ca",
         "target_countries": target_countries or [adzuna_country or "ca"],
+        "target_regions": target_regions or [],
         "cold_email": {
             "daily_cap_week1": cold_email_week1,
             "daily_cap_week3plus": cold_email_week3plus,

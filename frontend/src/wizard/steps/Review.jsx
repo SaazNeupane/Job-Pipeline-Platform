@@ -49,6 +49,7 @@ function ReviewSummary({ profile, resumes, setError }) {
       value: `${profile.greenhouse_boards?.length || 0} Greenhouse, ${profile.lever_companies?.length || 0} Lever, ${profile.ashby_boards?.length || 0} Ashby`,
     },
     { label: "Countries accepted", value: profile.target_countries?.length ? profile.target_countries.join(", ") : "any" },
+    { label: "Provinces/states accepted", value: profile.target_regions?.length ? profile.target_regions.join(", ") : "any" },
     { label: "Daily queue limit", value: `${profile.apply_daily_cap} per lane, per day` },
     { label: "Run time", value: `${String(profile.run_hour_utc ?? 14).padStart(2, "0")}:00 UTC` },
     { label: "Connected Google account", value: profile.gmail_address },

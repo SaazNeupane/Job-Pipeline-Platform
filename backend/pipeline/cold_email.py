@@ -64,7 +64,7 @@ import dns.resolver
 import requests
 
 from pipeline.config import load_secrets
-from pipeline.filter import _is_recent, _matches_target_countries
+from pipeline.filter import _is_recent, _matches_target_countries, _matches_target_regions
 from pipeline.google_auth import get_gmail_service, send_email
 from pipeline.postings_store import get_cold_email_dedupe_keys, get_cold_emails, record_cold_email, update_cold_email
 from pipeline.search import REQUEST_TIMEOUT_SECONDS, _strip_html, search_adzuna, search_hiring_cafe
@@ -450,7 +450,9 @@ def run_cold_email_pipeline(user: str, profile, secrets: dict) -> dict:
 
     eligible = [
         p for p in postings
-        if _matches_target_countries(p.location, profile.target_countries) and _is_recent(p.posted_at)
+        if _matches_target_countries(p.location, profile.target_countries)
+        and _matches_target_regions(p.location, profile.target_regions)
+        and _is_recent(p.posted_at)
     ]
 
     resumes_by_lane: dict[str, dict] = {}

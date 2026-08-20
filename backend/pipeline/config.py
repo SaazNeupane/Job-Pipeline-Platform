@@ -104,6 +104,10 @@ class Profile:
     ashby_boards: list[str] = field(default_factory=list)
     adzuna_country: str = "us"
     target_countries: list[str] = field(default_factory=lambda: ["ca"])
+    # Optional finer filter within target_countries -- province/state codes or names
+    # (see pipeline/filter.py's _matches_target_regions). Empty means no region
+    # restriction, same "no filter" default as every other optional setting here.
+    target_regions: list[str] = field(default_factory=list)
     apply_daily_cap: int = 15
     github_repo: str = ""
     # Lane name -> parsed resume JSON dict (the old build_resume_json() output). The
@@ -139,6 +143,7 @@ def load_profile(user: str) -> Profile:
         ashby_boards=list(row.ashby_boards_json or []),
         adzuna_country=row.adzuna_country or "us",
         target_countries=list(row.target_countries_json or ["ca"]),
+        target_regions=list(row.target_regions_json or []),
         apply_daily_cap=row.apply_daily_cap,
         github_repo=row.github_repo or "",
         resumes=dict(row.resumes_json or {}),

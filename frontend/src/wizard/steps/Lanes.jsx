@@ -6,7 +6,7 @@ import { useApiData } from "../../hooks/useApiData.js";
 
 const emptyCustomLane = () => ({
   id: crypto.randomUUID(),
-  label: "", keywords: "", required_keywords: "", seniority_max: "", industries: "",
+  label: "", keywords: "", required_keywords: "", seniority_max: "", max_years_experience: "", industries: "",
   inPerson: false, radius_km: "",
   sources: null, // null = all real sources (backend default)
   remote_types: [], employment_types: [],
@@ -40,6 +40,7 @@ const LANE_ICONS = {
   food_service: "🍳", customer_service: "🎧", administrative: "🗂️", healthcare_support: "🩺",
   skilled_trades: "🔧", education_childcare: "🎓", general_labor: "🏗️", delivery_driver: "🚚",
   manufacturing: "⚙️", accounting_finance: "💰", marketing_creative: "🎨", cleaning_janitorial: "🧹",
+  new_grad_coop: "🎓",
 };
 
 const SENIORITY_LABELS = {
@@ -57,6 +58,7 @@ export default function Lanes() {
   const [presetExcluded, setPresetExcluded] = useState({}); // preset name -> Set of unchecked default keywords
   const [presetExtra, setPresetExtra] = useState({}); // preset name -> "add your own" text
   const [presetSeniority, setPresetSeniority] = useState({}); // preset name -> overridden level, "" = preset's own default
+  const [presetMaxYears, setPresetMaxYears] = useState({}); // preset name -> overridden years-of-experience cap, "" = preset's own default
   const [customLanes, setCustomLanes] = useState([]);
   const [presetFilter, setPresetFilter] = useState("");
   const [greenhouseBoards, setGreenhouseBoards] = useState((draft.greenhouse_boards || []).join(", "));
@@ -64,6 +66,7 @@ export default function Lanes() {
   const [ashbyBoards, setAshbyBoards] = useState((draft.ashby_boards || []).join(", "));
   const [adzunaCountry, setAdzunaCountry] = useState(draft.adzuna_country || "ca");
   const [targetCountries, setTargetCountries] = useState((draft.target_countries || []).join(", "));
+  const [targetRegions, setTargetRegions] = useState((draft.target_regions || []).join(", "));
   const [runHourUtc, setRunHourUtc] = useState(draft.run_hour_utc ?? 14);
 
   const { data: meta, error, setError } = useApiData(() => api.lanePresets(), []);
@@ -115,10 +118,13 @@ export default function Lanes() {
       const keywordsChanged = excluded.size > 0 || extra.length > 0;
       const seniority = presetSeniority[name];
       const seniorityChanged = seniority !== undefined && seniority !== (meta.presets[name].seniority_max || "");
+      const maxYears = presetMaxYears[name];
+      const maxYearsChanged = maxYears !== undefined && maxYears !== String(meta.presets[name].max_years_experience ?? "");
       return {
         name,
         ...(keywordsChanged ? { keywords: presetKeywords(name) } : {}),
         ...(seniorityChanged ? { seniority_max: seniority || null } : {}),
+        ...(maxYearsChanged ? { max_years_experience: maxYears ? parseInt(maxYears, 10) : null } : {}),
       };
     });
     const custom_lanes = customLanes
@@ -128,6 +134,7 @@ export default function Lanes() {
         keywords: csv(c.keywords),
         required_keywords: c.required_keywords ? csv(c.required_keywords) : null,
         seniority_max: c.seniority_max || null,
+        max_years_experience: c.max_years_experience ? parseInt(c.max_years_experience, 10) : null,
         industries: c.industries ? csv(c.industries) : [],
         radius_km: c.inPerson && c.radius_km ? parseFloat(c.radius_km) : null,
         sources: c.sources,
@@ -146,6 +153,7 @@ export default function Lanes() {
         ashby_boards: csv(ashbyBoards),
         adzuna_country: adzunaCountry.trim().toLowerCase(),
         target_countries: csv(targetCountries).map((c) => c.toLowerCase()),
+        target_regions: csv(targetRegions).map((r) => r.toLowerCase()),
         run_hour_utc: runHourUtc,
       });
       await refreshDraft();
@@ -244,6 +252,15 @@ export default function Lanes() {
                   ))}
                 </select>
               </label>
+              <label>
+                Max years of experience required (optional)
+                <input
+                  type="number" min="0"
+                  value={presetMaxYears[name] ?? (meta.presets[name].max_years_experience ?? "")}
+                  onChange={(e) => setPresetMaxYears({ ...presetMaxYears, [name]: e.target.value })}
+                  placeholder="e.g. 1 -- skips postings asking for more"
+                />
+              </label>
             </details>
           );
         })}
@@ -285,6 +302,10 @@ export default function Lanes() {
           <label>
             Countries you'll accept postings from (comma-separated; codes like "ca"/"us"/"gb"/"au" are matched precisely, anything else is matched as a plain country name)
             <input value={targetCountries} onChange={(e) => setTargetCountries(e.target.value)} placeholder="e.g. ca, us" />
+          </label>
+          <label>
+            Provinces/states to narrow down to (optional, comma-separated; e.g. "on, bc" or "texas"). Leave blank to accept postings anywhere in the countries above
+            <input value={targetRegions} onChange={(e) => setTargetRegions(e.target.value)} placeholder="e.g. on, bc, ab" />
           </label>
           <label>
             What hour your daily run happens (UTC)
@@ -331,6 +352,14 @@ function CustomLaneEditor({ lane, meta, onChange, onRemove }) {
                 <option key={level} value={level}>{SENIORITY_LABELS[level] || level}</option>
               ))}
             </select>
+          </label>
+          <label>
+            Max years of experience required (optional)
+            <input
+              type="number" min="0" value={lane.max_years_experience}
+              onChange={(e) => onChange({ max_years_experience: e.target.value })}
+              placeholder="e.g. 1 -- skips postings asking for more"
+            />
           </label>
         </div>
         <p className="hint">"Must also mention" narrows matches down further: a posting has to include at least one of these words too, on top of the main keywords above.</p>

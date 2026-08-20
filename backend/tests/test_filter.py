@@ -121,3 +121,29 @@ def test_adzuna_source_skips_location_check():
     p = _posting(source="adzuna", location="Some Unrecognized Format")
     results = filter_postings([p], _lane(sources=["adzuna"]), existing_keys=set(), target_countries=["ca"])
     assert len(results) == 1
+
+
+def test_target_regions_excludes_other_provinces():
+    p = _posting(location="Vancouver, BC")
+    results = filter_postings(
+        [p], _lane(), existing_keys=set(), target_countries=["ca"], target_regions=["on"],
+    )
+    assert results == []
+
+
+def test_target_regions_matches_named_province():
+    p = _posting(location="Toronto, ON")
+    results = filter_postings(
+        [p], _lane(), existing_keys=set(), target_countries=["ca"], target_regions=["on"],
+    )
+    assert len(results) == 1
+
+
+def test_target_regions_applies_even_to_adzuna():
+    # Unlike target_countries, target_regions has no "already correct by construction"
+    # exemption for Adzuna -- Adzuna only scopes requests by country, never by province/state.
+    p = _posting(source="adzuna", location="Vancouver, BC")
+    results = filter_postings(
+        [p], _lane(sources=["adzuna"]), existing_keys=set(), target_countries=["ca"], target_regions=["on"],
+    )
+    assert results == []

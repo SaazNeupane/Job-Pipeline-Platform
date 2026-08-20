@@ -138,6 +138,8 @@ def set_lanes(body: dict, user: User = Depends(get_current_user), db: Session = 
         # preset's own default", present (even as null, for "no limit") means override.
         if "seniority_max" in p:
             overrides["seniority_max"] = p["seniority_max"]
+        if "max_years_experience" in p:
+            overrides["max_years_experience"] = p["max_years_experience"]
         return overrides or None
 
     try:
@@ -154,6 +156,7 @@ def set_lanes(body: dict, user: User = Depends(get_current_user), db: Session = 
                 salary_max=c.get("salary_max"),
                 required_keywords=c.get("required_keywords"),
                 seniority_max=c.get("seniority_max"),
+                max_years_experience=c.get("max_years_experience"),
                 industries=c.get("industries"),
                 min_match_score=c.get("min_match_score"),
             ))
@@ -175,6 +178,7 @@ def set_lanes(body: dict, user: User = Depends(get_current_user), db: Session = 
     draft["ashby_boards"] = [str(b).strip() for b in (body.get("ashby_boards") or []) if str(b).strip()]
     draft["adzuna_country"] = str(body.get("adzuna_country", "ca")).strip().lower()
     draft["target_countries"] = [str(c).strip().lower() for c in (body.get("target_countries") or []) if str(c).strip()]
+    draft["target_regions"] = [str(r).strip().lower() for r in (body.get("target_regions") or []) if str(r).strip()]
     draft["run_hour_utc"] = max(0, min(23, int(body.get("run_hour_utc", 14) or 14)))
 
     row.draft_json = draft
@@ -199,6 +203,7 @@ def _build_profile_and_resumes(user_id: str, draft: dict, granted_email: str) ->
         ashby_boards=draft.get("ashby_boards"),
         adzuna_country=draft.get("adzuna_country", "ca"),
         target_countries=draft.get("target_countries"),
+        target_regions=draft.get("target_regions"),
         sheet_id=draft.get("sheet_id", ""),
         gmail_address=granted_email,
         report_email=granted_email,
@@ -306,6 +311,7 @@ def finalize(user: User = Depends(get_current_user), db: Session = Depends(get_d
     profile_row.lever_companies_json = profile_dict["lever_companies"]
     profile_row.ashby_boards_json = profile_dict["ashby_boards"]
     profile_row.target_countries_json = profile_dict["target_countries"]
+    profile_row.target_regions_json = profile_dict["target_regions"]
     profile_row.apply_daily_cap = profile_dict["apply_daily_cap"]
     profile_row.run_hour_utc = profile_dict["run_hour_utc"]
     profile_row.resumes_json = resumes
