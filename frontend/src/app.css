@@ -902,9 +902,10 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .run-override { display: flex; align-items: flex-end; gap: 1rem; flex-wrap: wrap; }
 .run-override label { gap: 0.3rem; font-size: 0.78rem; }
 .run-override select { min-width: 8rem; }
-.run-override-days { display: flex; align-items: center; gap: 0.4rem; }
-.run-override-days input { width: 4rem; }
-.run-override-days span { font-size: 0.85rem; color: var(--ink-soft); }
+.run-override-days { display: flex; align-items: flex-end; gap: 0.4rem; }
+.run-override-days input { width: 5.5rem; padding-left: 0.6rem; padding-right: 0.6rem; }
+.run-override-days span { font-size: 0.85rem; color: var(--ink-soft); padding-bottom: 0.85rem; }
+.run-override .checkbox-row { padding-bottom: 0.85rem; }
 .run-override .hint { flex-basis: 100%; margin-top: -0.2rem; }
 
 .lane-section { margin-top: 2rem; }
