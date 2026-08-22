@@ -166,16 +166,24 @@ function UserDetailRow({ user, onChanged }) {
                   <tbody>
                     {detail.recent_runs.map((r, i) => {
                       // r.errors is always a numeric string ("0", "1", ...), never "" -- see
-                      // Dashboard.jsx's own Runs tab for the same fix and why.
+                      // Dashboard.jsx's own Runs tab for the same fix and why. r.notes holds
+                      // the actual "; "-joined error messages behind that count.
                       const errorCount = Number(r.errors) || 0;
                       return (
-                        <tr key={i}>
-                          <td>{r.date}</td>
-                          <td>{r.queued}</td>
-                          <td>{r.applied}</td>
-                          <td>{r.emails_sent}</td>
-                          <td>{errorCount ? <span className="badge amber">{errorCount}</span> : <span className="hint">none</span>}</td>
-                        </tr>
+                        <Fragment key={i}>
+                          <tr>
+                            <td>{r.date}</td>
+                            <td>{r.queued}</td>
+                            <td>{r.applied}</td>
+                            <td>{r.emails_sent}</td>
+                            <td>{errorCount ? <span className="badge amber">{errorCount}</span> : <span className="hint">none</span>}</td>
+                          </tr>
+                          {errorCount > 0 && r.notes && (
+                            <tr>
+                              <td colSpan={5}><p className="hint admin-run-notes">{r.notes}</p></td>
+                            </tr>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tbody>
@@ -214,7 +222,10 @@ function UsersPanel() {
               {users.map((u) => (
                 <Fragment key={u.id}>
                   <tr onClick={() => setExpandedId(expandedId === u.id ? "" : u.id)} style={{ cursor: "pointer" }}>
-                    <td>{u.email}{u.is_admin && <span className="badge" style={{ marginLeft: "0.4rem" }}>Admin</span>}</td>
+                    <td className="admin-email-cell">
+                      <span>{u.email}</span>
+                      {u.is_admin && <span className="badge">Admin</span>}
+                    </td>
                     <td>{u.created_at.slice(0, 10)}</td>
                     <td>{u.email_verified ? <span className="badge pine">Yes</span> : <span className="hint">No</span>}</td>
                     <td>{u.has_profile ? <span className="badge pine">Done</span> : <span className="hint">In progress</span>}</td>

@@ -500,6 +500,9 @@ legend {
 /* Landing page --------------------------------------------------------- */
 .hero { padding: 1.5rem 0 2.5rem; }
 .hero-badge { margin-bottom: 0.8rem; }
+@media (max-width: 640px) {
+  .hero-badge { white-space: normal; text-align: center; line-height: 1.4; border-radius: var(--radius-sm); padding: 0.4rem 0.7rem; }
+}
 
 /* Sequenced hero reveal: the prompt line types itself out (see Home.jsx's
    useTypewriter), then this class stages in the headline/lede/actions one
@@ -551,6 +554,12 @@ legend {
 @keyframes cursor-blink { 50% { opacity: 0; } }
 .terminal-body .hero-actions { margin-top: 1.8rem; }
 .hero-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .terminal-body { padding: 1.4rem 1.1rem 1.6rem; }
+  .terminal-h1 { font-size: 1.7rem; max-width: none; }
+  .terminal-line { font-size: 0.78rem; }
+  .hero-actions { flex-direction: column; align-items: stretch; }
+}
 
 /* Process strip: continues inside the SAME terminal window the hero's `$ ./run_pipeline
    --daily` line lives in, rather than a second window with its own titlebar further down
@@ -871,6 +880,12 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 }
 .stat-item-icon.signal { background: var(--redline-soft); border-color: transparent; color: var(--redline-strong); }
 .stat-item-icon.pine { background: var(--approved-soft); border-color: transparent; color: var(--approved); }
+@media (max-width: 640px) {
+  .stat-strip { flex-direction: column; }
+  .stat-item { border-right: none; border-bottom: 1px solid var(--wire); padding: 1rem 0; }
+  .stat-item:first-child { padding-left: 0; }
+  .stat-item:last-child { border-bottom: none; }
+}
 .stat-num { font-family: var(--font-mono); font-size: 1.7rem; font-weight: 700; line-height: 1.2; margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
 .stat-num.signal { color: var(--redline-strong); }
 .stat-num.pine { color: var(--approved); }
@@ -994,6 +1009,10 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .detail-panel-heading h4 { margin: 0; }
 .copy-btn { padding: 0.2rem 0.5rem; font-size: 0.78rem; font-weight: 600; color: var(--ink-faint); }
 .copy-btn:hover { color: var(--redline-strong); opacity: 1; }
+
+.admin-email-cell { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.admin-run-notes { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.run-quota-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 
 table { width: 100%; border-collapse: collapse; margin-bottom: 1.25rem; font-size: 0.9rem; }
 th { text-align: left; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--wire); }

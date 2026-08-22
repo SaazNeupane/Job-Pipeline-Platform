@@ -464,8 +464,9 @@ export default function Dashboard() {
               )}
               {runState === "started" && <p className="hint" style={{ margin: 0 }}>Run started. Check back in a few minutes.</p>}
               {user && (
-                <p className="hint" style={{ margin: 0 }}>
-                  {user.manual_runs_used}/{user.manual_runs_limit} manual runs used this month ({user.plan} plan)
+                <p className="hint run-quota-line" style={{ margin: 0 }}>
+                  <span className={`badge${user.plan === "paid" ? " pine" : ""}`}>{user.plan === "paid" ? "Paid" : "Free"}</span>
+                  {user.manual_runs_used}/{user.manual_runs_limit} manual runs used this month
                   {user.plan === "free" && quotaExhausted && " -- upgrade for more."}
                 </p>
               )}

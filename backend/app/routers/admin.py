@@ -138,6 +138,7 @@ def user_detail(user_id: str, _admin: User = Depends(get_current_admin), db: Ses
                 "applied": r.applied_count,
                 "emails_sent": r.emails_sent,
                 "errors": r.errors,
+                "notes": r.notes,
             }
             for r in recent_runs
         ],
