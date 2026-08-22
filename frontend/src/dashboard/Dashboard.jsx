@@ -9,254 +9,10 @@ import { CheckCircleIcon, InboxIcon, MailIcon, RunsIcon } from "../components/ic
 import StatItem from "../components/StatItem.jsx";
 import { useApiData } from "../hooks/useApiData.js";
 import { sourceLabel } from "../sourceLabels.js";
-
-function CopyButton({ text }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // clipboard API unavailable (e.g. non-HTTPS context) -- fail silently,
-      // the text is already right there to select by hand
-      return;
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  return (
-    <button type="button" className="ghost copy-btn" onClick={copy}>
-      {copied ? "Copied" : "Copy"}
-    </button>
-  );
-}
-
-function matchPercent(score) {
-  if (score === null || score === undefined || score === "") return null;
-  return Math.round(Number(score) * 100);
-}
-
-const OUTCOME_LABELS = {
-  "": "No response yet",
-  responded: "Got a response",
-  interview: "Interview",
-  offer: "Offer",
-  rejected: "Rejected",
-};
-
-function PostingCard({ row, selected, onToggleSelect, onPromote, onDismiss, onRetry, onSetOutcome, open, onToggleOpen, applied, busy }) {
-  const generating = row.reason_held === "generating";
-  const failed = (row.reason_held || "").startsWith("generation_failed");
-  const match = matchPercent(row.match_score);
-  const terms = (row.matched_terms || "").split(",").filter(Boolean);
-  const flags = (row.content_flags || "").split("; ").filter(Boolean);
-  return (
-    <div className={`posting-card ${applied ? "posting-card--applied" : "posting-card--pending"}${selected ? " selected" : ""}`}>
-      <div className="posting-card-top">
-        {!applied && (
-          <label className="posting-select">
-            <input type="checkbox" checked={selected} onChange={(e) => onToggleSelect(e.target.checked)} disabled={!!busy || generating} />
-          </label>
-        )}
-        <div className="posting-main">
-          <div className="posting-company">{row.company}</div>
-          <div className="posting-role">{row.role}</div>
-          <div className="posting-meta">
-            {generating && (
-              <span className="badge signal spinner-badge">
-                <span className="spinner" />Tailoring resume &amp; cover letter…
-                <button type="button" className="badge-retry" onClick={onRetry} disabled={!!busy} title="Stuck? Try again">retry</button>
-              </span>
-            )}
-            {failed && (
-              <span className="badge danger" title={row.reason_held}>
-                Generation failed
-                <button type="button" className="badge-retry" onClick={onRetry} disabled={!!busy}>{busy === "retry" ? "retrying…" : "retry"}</button>
-              </span>
-            )}
-            {match !== null && <span className="badge signal">{match}% match</span>}
-            {row.source && <span className="badge">{sourceLabel(row.source)}</span>}
-            {row.location && <span className="badge">{row.location}</span>}
-            {row.required_years && <span className="badge">{row.required_years}+ yrs exp</span>}
-            {applied && <span className="badge pine">{row.application_status}</span>}
-            {applied && onSetOutcome && (
-              <select
-                className="outcome-select"
-                value={row.outcome || ""}
-                disabled={busy === "outcome"}
-                onChange={(e) => onSetOutcome(e.target.value)}
-              >
-                {Object.entries(OUTCOME_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            )}
-            <span className="hint">
-              {applied ? "applied" : "found"} {row.date}
-              {row.posted_date ? ` · posted ${row.posted_date.slice(0, 10)}` : ""}
-            </span>
-          </div>
-        </div>
-        <div className="posting-actions">
-          {(row.application_url || row.resume_link || row.cover_letter) && (
-            <button type="button" className="ghost" onClick={onToggleOpen} disabled={!!busy}>{open ? "Hide" : "Details"}</button>
-          )}
-          {!applied && (
-            <>
-              <button type="button" className="danger" onClick={onDismiss} disabled={!!busy}>{busy === "dismiss" ? "Working…" : "Dismiss"}</button>
-              <button type="button" className="primary" onClick={onPromote} disabled={!!busy || generating} title={generating ? "Still tailoring your resume and cover letter" : undefined}>{busy === "promote" ? "Working…" : "Mark applied"}</button>
-            </>
-          )}
-        </div>
-      </div>
-      {open && (
-        <div className="detail-panel">
-          <div className="detail-panel-links">
-            {row.application_url && <a className="button" href={row.application_url} target="_blank" rel="noopener">View posting &amp; apply</a>}
-            {row.resume_link && <a className="button secondary" href={row.resume_link} target="_blank" rel="noopener">Open tailored resume</a>}
-          </div>
-          {terms.length > 0 && (
-            <div className="swipe-card-terms">
-              {terms.map((t) => <span key={t} className="badge amber">{t}</span>)}
-            </div>
-          )}
-          {flags.length > 0 && (
-            <div className="swipe-card-terms">
-              {flags.map((f) => <span key={f} className="badge danger">{f}</span>)}
-            </div>
-          )}
-          {row.cover_letter && (
-            <>
-              <div className="detail-panel-heading">
-                <h4>Cover letter</h4>
-                <CopyButton text={row.cover_letter} />
-              </div>
-              <pre className="code-block">{row.cover_letter}</pre>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AddManualPosting({ laneNames, laneLabels, onAdded }) {
-  const [open, setOpen] = useState(false);
-  const [lane, setLane] = useState(laneNames[0] || "");
-  const [text, setText] = useState("");
-  const [url, setUrl] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  async function submit(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      const result = await api.addManualPosting(lane, text, url);
-      setText("");
-      setUrl("");
-      setOpen(false);
-      onAdded(result.row);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (!laneNames.length) {
-    return (
-      <details className="advanced manual-posting">
-        <summary>Found one yourself? Paste a posting in</summary>
-        <p className="hint">
-          This needs at least one job type set up first, since tailoring a resume for a
-          posting means pulling from one of your lane's resumes. <Link to="/setup/lanes">Add a job type</Link>,
-          then come back here.
-        </p>
-      </details>
-    );
-  }
-
-  return (
-    <details className="advanced manual-posting" open={open} onToggle={(e) => setOpen(e.target.open)}>
-      <summary>Found one yourself? Paste a posting in</summary>
-      <form onSubmit={submit}>
-        <p className="hint">
-          Paste the full text of a posting from anywhere, Indeed, LinkedIn, a company site,
-          and it goes straight to tailoring a resume and cover letter for it, same as a
-          right-swipe would. No need to send it through the swipe queue first.
-        </p>
-        {error && <p className="error-banner">{error}</p>}
-        <label>
-          Job type
-          <select value={lane} onChange={(e) => setLane(e.target.value)}>
-            {laneNames.map((name) => (
-              <option key={name} value={name}>{laneLabels[name] || name.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-        </label>
-        {laneNames.length > 1 && (
-          <p className="hint">
-            Nothing here quite fits? Pick whichever's closest, it tailors against that lane's resume.
-            {" "}<Link to="/setup/lanes">Add a new job type</Link> if you'd rather build one for this instead.
-          </p>
-        )}
-        <label>
-          Posting link (optional)
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." />
-        </label>
-        <label>
-          Job posting text
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={8}
-            placeholder="Paste the whole posting here -- title, company, location, description"
-          />
-        </label>
-        <button type="submit" className="primary" disabled={busy || !text.trim()}>
-          {busy ? "Reading it…" : "Add it"}
-        </button>
-      </form>
-    </details>
-  );
-}
-
-function GoogleReconnectBanner({ onReconnected }) {
-  const [status, setStatus] = useState("idle"); // idle | pending | error
-
-  useEffect(() => {
-    if (status !== "pending") return;
-    const id = setInterval(async () => {
-      const res = await api.googleOAuthStatus();
-      if (res.connected) {
-        clearInterval(id);
-        onReconnected();
-      }
-    }, 1500);
-    return () => clearInterval(id);
-  }, [status, onReconnected]);
-
-  async function reconnect() {
-    setStatus("pending");
-    try {
-      const { authorization_url } = await api.googleOAuthStart();
-      window.location.href = authorization_url;
-    } catch {
-      setStatus("error");
-    }
-  }
-
-  return (
-    <div className="error-banner">
-      <p>Your Google connection expired -- Sheets/Gmail/Drive calls can't go through until you reconnect.</p>
-      <button type="button" onClick={reconnect}>Reconnect Google</button>
-      {status === "error" && <p>Reconnect didn't finish. Try again.</p>}
-    </div>
-  );
-}
+import { showToast } from "../toast.js";
+import AddManualPosting from "./AddManualPosting.jsx";
+import GoogleReconnectBanner from "./GoogleReconnectBanner.jsx";
+import PostingCard from "./PostingCard.jsx";
 
 export default function Dashboard() {
   const { user, refreshUser } = useAuth();
@@ -275,6 +31,19 @@ export default function Dashboard() {
   const [runColdEmailOnly, setRunColdEmailOnly] = useState(false);
   const [tab, setTab] = useState("review"); // overview | review | applied | runs
   const quotaExhausted = !!user && user.manual_runs_used >= user.manual_runs_limit;
+
+  useEffect(() => {
+    // Picks up plan/quota changes made elsewhere (e.g. an admin plan flip) without a
+    // re-login. Compares against the plan already in context (set at login/last refresh)
+    // rather than a ref, since the point is exactly "did it change since last time we knew."
+    const priorPlan = user?.plan;
+    refreshUser().then((me) => {
+      if (priorPlan && priorPlan !== "paid" && me.plan === "paid") {
+        showToast("You're on Pro now.", "pine");
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function runNow() {
     setRunState("pending");
@@ -465,7 +234,7 @@ export default function Dashboard() {
               {runState === "started" && <p className="hint" style={{ margin: 0 }}>Run started. Check back in a few minutes.</p>}
               {user && (
                 <p className="hint run-quota-line" style={{ margin: 0 }}>
-                  <span className={`badge${user.plan === "paid" ? " pine" : ""}`}>{user.plan === "paid" ? "Paid" : "Free"}</span>
+                  <span className={`badge${user.plan === "paid" ? " pine" : ""}`}>{user.plan === "paid" ? "Pro" : "Free"}</span>
                   {user.manual_runs_used}/{user.manual_runs_limit} manual runs used this month
                   {user.plan === "free" && quotaExhausted && " -- upgrade for more."}
                 </p>
