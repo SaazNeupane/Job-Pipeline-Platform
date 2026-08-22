@@ -118,6 +118,17 @@ function UserDetailRow({ user, onChanged }) {
     }
   }
 
+  async function togglePlan() {
+    setBusy(true);
+    try {
+      await api.adminSetUserPlan(user.id, detail.plan === "paid" ? "free" : "paid");
+      await reload();
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (error) return <tr><td colSpan={6}><p className="error-banner">{error}</p></td></tr>;
   if (!detail) return <tr><td colSpan={6}><Loading /></td></tr>;
 
@@ -139,6 +150,15 @@ function UserDetailRow({ user, onChanged }) {
                 </p>
                 <p className="eyebrow">Schedule</p>
                 <p>{detail.profile.apply_daily_cap} per lane/day, runs at {String(detail.profile.run_hour_utc).padStart(2, "0")}:00 UTC</p>
+              </div>
+              <div>
+                <p className="eyebrow">Plan</p>
+                <p>
+                  <span className={`badge${detail.plan === "paid" ? " pine" : ""}`}>{detail.plan === "paid" ? "Pro" : "Free"}</span>
+                  <button type="button" className="ghost badge-retry" style={{ marginLeft: "0.5rem" }} disabled={busy} onClick={togglePlan}>
+                    {busy ? "Saving…" : detail.plan === "paid" ? "Downgrade to free" : "Upgrade to Pro"}
+                  </button>
+                </p>
               </div>
               <div>
                 <p className="eyebrow">Google</p>

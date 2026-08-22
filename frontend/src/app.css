@@ -947,7 +947,7 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .filter-pill.active { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 
 .bulk-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
   background: var(--redline-soft); border: 1px solid var(--redline); border-radius: var(--radius-sm);
   padding: 0.6rem 1rem; margin-bottom: 1rem; font-size: 0.86rem; font-weight: 600; color: var(--redline-strong);
 }
@@ -1013,6 +1013,7 @@ details.advanced > *:not(summary) { margin-top: 0.9rem; }
 .admin-email-cell { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .admin-run-notes { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .run-quota-line { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.topbar-plan-badge { margin-left: 0.5rem; vertical-align: middle; }
 
 table { width: 100%; border-collapse: collapse; margin-bottom: 1.25rem; font-size: 0.9rem; }
 th { text-align: left; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-faint); font-weight: 600; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--wire); }
@@ -1079,7 +1080,7 @@ tr:last-child td { border-bottom: none; }
 }
 .swipe-card h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.6rem; margin: 0 0 0.15rem; }
 .swipe-card-company { color: var(--ink-soft); font-size: 1rem; margin-bottom: 0.7rem; }
-.swipe-card-facts { display: flex; gap: 1.5rem; margin: 0.85rem 0; font-size: 0.9rem; }
+.swipe-card-facts { display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem; margin: 0.85rem 0; font-size: 0.9rem; }
 .swipe-card-facts .eyebrow { display: block; margin-bottom: 0.1rem; }
 .swipe-card-terms { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.9rem; }
 .swipe-card-desc { color: var(--ink-soft); font-size: 0.88rem; line-height: 1.5; margin: 0.9rem 0; }

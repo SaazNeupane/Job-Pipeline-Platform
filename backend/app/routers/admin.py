@@ -117,6 +117,7 @@ def user_detail(user_id: str, _admin: User = Depends(get_current_admin), db: Ses
         "active": user.active,
         "email_verified": user.email_verified,
         "is_admin": user.is_admin,
+        "plan": user.plan,
         "profile": None if profile is None else {
             "lanes": [{"name": l.get("name"), "keywords": l.get("keywords", [])} for l in (profile.lanes_json or [])],
             "target_countries": profile.target_countries_json or [],
@@ -161,3 +162,21 @@ def set_user_active(
     user.active = bool(body.get("active", True))
     db.commit()
     return {"id": user.id, "active": user.active}
+
+
+@router.post("/users/{user_id}/plan")
+def set_user_plan(
+    user_id: str, body: dict, _admin: User = Depends(get_current_admin), db: Session = Depends(get_db),
+):
+    """Flip a user between free/paid -- manual admin override, no payment processor wired
+    up yet (see PLAN_MANUAL_RUN_LIMITS/PLAN_ALLOWED_SOURCES in app/main.py and
+    pipeline/run_pipeline.py for what plan actually gates)."""
+    plan = body.get("plan")
+    if plan not in ("free", "paid"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "plan must be 'free' or 'paid'.")
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user.")
+    user.plan = plan
+    db.commit()
+    return {"id": user.id, "plan": user.plan}

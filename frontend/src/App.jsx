@@ -88,6 +88,7 @@ function VerifyEmailBanner() {
 }
 
 export default function App() {
+  const { user } = useAuth();
   const location = useLocation();
   const pathname = location.pathname;
   const isDashboard = pathname.startsWith("/dashboard") || pathname.startsWith("/swipe") || pathname.startsWith("/cold-email") || pathname.startsWith("/admin");
@@ -116,6 +117,7 @@ export default function App() {
         <Link to="/" className="brand">
           <Logo />
           Crond
+          {user?.plan === "paid" && <span className="badge pine topbar-plan-badge">Pro</span>}
         </Link>
         <button
           type="button"

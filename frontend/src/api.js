@@ -149,4 +149,5 @@ export const api = {
   adminUsers: () => get("/api/admin/users"),
   adminUserDetail: (userId) => get(`/api/admin/users/${encodeURIComponent(userId)}`),
   adminSetUserActive: (userId, active) => post(`/api/admin/users/${encodeURIComponent(userId)}/active`, { active }),
+  adminSetUserPlan: (userId, plan) => post(`/api/admin/users/${encodeURIComponent(userId)}/plan`, { plan }),
 };
